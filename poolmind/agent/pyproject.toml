@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "poolmind_agent"
+version = "0.1.0"
+description = "PoolMind AI Agent for Cross-Exchange Arbitrage Trading"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "PoolMind Team"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+dependencies = [
+    "fastapi>=0.95.0",
+    "uvicorn>=0.21.0",
+    "pydantic>=2.0.0",
+    "langchain>=0.0.267",
+    "langchain-community>=0.0.1",
+    "langgraph>=0.0.15",
+    "chromadb>=0.4.13",
+    "redis>=4.5.5",
+    "sqlalchemy>=2.0.0",
+    "psycopg2-binary>=2.9.6",
+    "httpx>=0.24.0",
+    "python-dotenv>=1.0.0",
+    "crewai>=0.1.0",
+    "numpy>=1.24.0",
+    "pandas>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.3.1",
+    "pytest-cov>=4.1.0",
+    "black>=23.3.0",
+    "isort>=5.12.0",
+    "mypy>=1.3.0",
+    "ruff>=0.0.270",
+]
+
+[tool.black]
+line-length = 88
+target-version = ["py39", "py310", "py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
