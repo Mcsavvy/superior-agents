@@ -1,6 +1,5 @@
 import type { ApiResponse } from "../types/wallet";
-
-const API_URL = import.meta.env.VITE_API_URL || ""
+import config from "../config";
 
 interface ConnectUrlResponse {
   url: string;
@@ -16,7 +15,7 @@ interface User {
   firstName?: string;
   lastName?: string;
   walletAddress?: string;
-  kycStatus: 'pending' | 'approved' | 'rejected';
+  kycStatus: "pending" | "approved" | "rejected";
   isActive: boolean;
   preferences?: {
     notifications?: boolean;
@@ -51,24 +50,38 @@ interface BalanceResponse {
   message?: string;
 }
 
+export interface PoolState {
+  admin: string;
+  paused: boolean;
+  transferable: boolean;
+  nav: number;
+  navFormatted: string;
+  entryFee: number;
+  entryFeeFormatted: string;
+  exitFee: number;
+  exitFeeFormatted: string;
+  stxBalance: number;
+  stxBalanceFormatted: string;
+}
+
 // Token management
 export const getAuthToken = (): string | null => {
-  return localStorage.getItem('poolmind_auth_token');
+  return localStorage.getItem(config.authTokenKey);
 };
 
 export const setAuthToken = (token: string): void => {
-  localStorage.setItem('poolmind_auth_token', token);
+  localStorage.setItem(config.authTokenKey, token);
 };
 
 export const removeAuthToken = (): void => {
-  localStorage.removeItem('poolmind_auth_token');
+  localStorage.removeItem(config.authTokenKey);
 };
 
 // User Profile API
 export const getUserProfile = async (): Promise<ApiResponse<User>> => {
   try {
     const token = getAuthToken();
-    
+
     if (!token) {
       return {
         success: false,
@@ -76,10 +89,10 @@ export const getUserProfile = async (): Promise<ApiResponse<User>> => {
       };
     }
 
-    const response = await fetch(`${API_URL}/api/v1/auth/profile`, {
+    const response = await fetch(config.getApiUrl("auth/profile"), {
       method: "GET",
       headers: {
-        "Authorization": `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
     });
@@ -107,10 +120,12 @@ export const getUserProfile = async (): Promise<ApiResponse<User>> => {
 };
 
 // Link wallet address to user profile
-export const linkWalletAddress = async (walletAddress: string): Promise<ApiResponse<User>> => {
+export const linkWalletAddress = async (
+  walletAddress: string,
+): Promise<ApiResponse<User>> => {
   try {
     const token = getAuthToken();
-    
+
     if (!token) {
       return {
         success: false,
@@ -118,10 +133,10 @@ export const linkWalletAddress = async (walletAddress: string): Promise<ApiRespo
       };
     }
 
-    const response = await fetch(`${API_URL}/api/v1/auth/wallet`, {
+    const response = await fetch(config.getApiUrl("auth/wallet"), {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -155,7 +170,7 @@ export const linkWalletAddress = async (walletAddress: string): Promise<ApiRespo
 export const unlinkWalletAddress = async (): Promise<ApiResponse<User>> => {
   try {
     const token = getAuthToken();
-    
+
     if (!token) {
       return {
         success: false,
@@ -163,10 +178,10 @@ export const unlinkWalletAddress = async (): Promise<ApiResponse<User>> => {
       };
     }
 
-    const response = await fetch(`${API_URL}/api/v1/auth/wallet`, {
+    const response = await fetch(config.getApiUrl("auth/wallet"), {
       method: "DELETE",
       headers: {
-        "Authorization": `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
     });
@@ -198,7 +213,7 @@ export const unlinkWalletAddress = async (): Promise<ApiResponse<User>> => {
 export const getUserBalances = async (): Promise<ApiResponse<BalanceData>> => {
   try {
     const token = getAuthToken();
-    
+
     if (!token) {
       return {
         success: false,
@@ -206,10 +221,10 @@ export const getUserBalances = async (): Promise<ApiResponse<BalanceData>> => {
       };
     }
 
-    const response = await fetch(`${API_URL}/api/v1/balance/all`, {
+    const response = await fetch(config.getApiUrl("balance/all"), {
       method: "GET",
       headers: {
-        "Authorization": `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
     });
@@ -246,7 +261,7 @@ export const getWalletConnectUrl = async (
     if (redirectUrl) params.append("redirectUrl", redirectUrl);
 
     const response = await fetch(
-      `${API_URL}/api/v1/wallet/connect-url?${params.toString()}`,
+      config.getApiUrl(`wallet/connect-url?${params.toString()}`),
       {
         method: "GET",
       },
@@ -264,6 +279,38 @@ export const getWalletConnectUrl = async (
     return {
       success: true,
       data,
+    };
+  } catch (error) {
+    console.error("API Error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Network error",
+    };
+  }
+};
+
+// Get pool state
+export const getPoolState = async (): Promise<ApiResponse<PoolState>> => {
+  try {
+    const response = await fetch(config.getApiUrl("pool/state"), {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: data.message || "Failed to fetch pool state",
+      };
+    }
+
+    return {
+      success: true,
+      data: data.data,
     };
   } catch (error) {
     console.error("API Error:", error);

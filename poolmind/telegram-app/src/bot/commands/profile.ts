@@ -308,20 +308,76 @@ export async function handleWalletCallback(
       return;
     }
 
+    // Ensure JWT token is set in API service for authenticated requests
+    if (!authService.ensureApiToken(ctx)) {
+      await ctx.answerCbQuery('Authentication token missing. Please restart the bot.');
+      return;
+    }
+
     switch (action) {
       case 'link':
         await ctx.answerCbQuery();
-        const walletPrefix = config.stacks.network === 'mainnet' ? 'SP' : 'ST';
-        await ctx.reply(
-          '🔗 <b>Link Your Stacks Wallet</b>\n\n' +
-            'To link your wallet, please provide your Stacks wallet address.\n\n' +
-            `📝 Reply with your wallet address (starts with ${walletPrefix}...):`,
-          {
-            parse_mode: 'HTML',
+        try {
+          logger.info('Generating wallet connection URL');
+          const response = await apiService.getWalletConnectUrl();
+
+          if (response.url) {
+            await ctx.reply(
+              '🔗 <b>Link Your Stacks Wallet</b>\n\n' +
+                'Click the link below to securely connect your Stacks wallet through our web interface.\n\n' +
+                response.url,
+              {
+                parse_mode: 'HTML',
+                reply_markup: {
+                  inline_keyboard: [
+                    [
+                      {
+                        text: '← Back to Wallet',
+                        callback_data: 'profile_wallet',
+                      },
+                    ],
+                  ],
+                },
+              }
+            );
+          } else {
+            logger.error('Failed to generate wallet connection URL');
+            await ctx.reply(
+              '❌ Unable to generate wallet connection link. Please try again later.',
+              {
+                reply_markup: {
+                  inline_keyboard: [
+                    [{ text: '🔄 Try Again', callback_data: 'wallet_link' }],
+                    [
+                      {
+                        text: '← Back to Wallet',
+                        callback_data: 'profile_wallet',
+                      },
+                    ],
+                  ],
+                },
+              }
+            );
           }
-        );
-        // Set session state to expect wallet address
-        ctx.session.step = 'awaiting_wallet_address';
+        } catch (error) {
+          logger.error('Error generating wallet connection URL:', error);
+          await ctx.reply(
+            '❌ Error generating wallet connection link. Please try again later.',
+            {
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: '🔄 Try Again', callback_data: 'wallet_link' }],
+                  [
+                    {
+                      text: '← Back to Wallet',
+                      callback_data: 'profile_wallet',
+                    },
+                  ],
+                ],
+              },
+            }
+          );
+        }
         break;
 
       case 'unlink':
@@ -372,64 +428,5 @@ export async function handleWalletCallback(
   } catch (error) {
     logError('Error in wallet callback:', error);
     await ctx.answerCbQuery('An error occurred');
-  }
-}
-
-// Handle text messages when expecting wallet address
-export async function handleWalletAddressInput(
-  ctx: SessionContext,
-  walletAddress: string
-): Promise<void> {
-  try {
-    // Validate Stacks address format
-    const walletPrefix = config.stacks.network === 'mainnet' ? 'SP' : 'ST';
-    if (
-      !walletAddress.startsWith(walletPrefix) ||
-      walletAddress.length !== 41
-    ) {
-      await ctx.reply(
-        '❌ Invalid Stacks address format.\n\n' +
-          `Please provide a valid Stacks address starting with "${walletPrefix}" and 41 characters long.\n\n` +
-          '📝 Try again:'
-      );
-      return;
-    }
-
-    try {
-      const response = await apiService.linkWallet({ walletAddress });
-
-      if (response.success) {
-        await authService.refreshUserProfile(ctx);
-        ctx.session.step = undefined; // Clear the step
-
-        await ctx.reply(
-          '✅ <b>Wallet Linked Successfully!</b>\n\n' +
-            `Your wallet ${walletAddress.slice(0, 8)}...${walletAddress.slice(-8)} has been connected to your account.\n\n` +
-            'You can now make deposits and withdrawals.',
-          {
-            parse_mode: 'HTML',
-            reply_markup: {
-              inline_keyboard: [
-                [{ text: '👤 View Profile', callback_data: 'profile_refresh' }],
-                [{ text: '🏠 Main Menu', callback_data: 'main_menu' }],
-              ],
-            },
-          }
-        );
-      } else {
-        await ctx.reply(
-          '❌ Failed to link wallet. The address might already be in use or invalid.\n\n' +
-            'Please try again with a different address.'
-        );
-      }
-    } catch (error) {
-      logger.error('Error linking wallet:', error);
-      await ctx.reply(
-        '❌ Error linking wallet. Please try again later or contact support.'
-      );
-    }
-  } catch (error) {
-    logError('Error handling wallet address input:', error);
-    await ctx.reply('An error occurred. Please try again.');
   }
 }

@@ -9,12 +9,10 @@ const requiredEnvVars: (string | (() => string[]))[] = [
   'JWT_SECRET',
   'ENCRYPTION_KEY',
   'STORAGE_TYPE',
-  () => {
-    if (process.env.STORAGE_TYPE === 'redis') {
-      return ['REDIS_URL'];
-    }
-    return [];
-  },
+  'REDIS_URL',
+  'STACKS_NETWORK',
+  'RATE_LIMIT_WINDOW',
+  'RATE_LIMIT_MAX',
 ];
 
 // Validate required environment variables
@@ -38,7 +36,6 @@ for (const envVar of requiredEnvVars) {
 export const config: AppConfig = {
   bot: {
     token: process.env.BOT_TOKEN!,
-    webhookUrl: process.env.WEBHOOK_URL,
   },
   server: {
     port: parseInt(process.env.PORT || '3000', 10),
@@ -64,16 +61,6 @@ export const config: AppConfig = {
   rateLimit: {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW || '900000', 10),
     max: parseInt(process.env.RATE_LIMIT_MAX || '100', 10),
-  },
-  brand: {
-    primary: process.env.PRIMARY_COLOR || '#0B1F3A',
-    secondary: process.env.SECONDARY_COLOR || '#3AA6FF',
-    accent: process.env.ACCENT_COLOR || '#D4AF37',
-    background: '#FFFFFF',
-    text: '#333333',
-    success: '#28A745',
-    warning: '#FFC107',
-    error: '#DC3545',
   },
 };
 

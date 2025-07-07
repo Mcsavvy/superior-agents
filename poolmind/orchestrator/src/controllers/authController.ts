@@ -4,6 +4,7 @@ import { IUser } from "../models/User";
 import { AuthUtils } from "../utils/auth";
 import { config } from "../config";
 import { WalletConnectUrlResponse } from "../types/wallet";
+import { notificationService } from "../services/notificationService";
 
 export class AuthController {
   /**
@@ -42,7 +43,7 @@ export class AuthController {
    */
   static async authenticateWithTelegram(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<void> {
     try {
       const authData = req.body;
@@ -237,9 +238,8 @@ export class AuthController {
 
       const token = AuthUtils.generateToken(authenticatedUser);
 
-      
       // Build the wallet connection URL
-      const baseUrl = config.server.getBaseUrl();
+      const baseUrl = config.server.frontendUrl || config.server.appUrl;
       const connectUrl = `${baseUrl}/wallet/connect?access_token=${token}`;
 
       const response: WalletConnectUrlResponse = {
@@ -331,6 +331,21 @@ export class AuthController {
         return;
       }
 
+      // Publish wallet linked notification
+      try {
+        await notificationService.publishWalletLinked(
+          updatedUser.telegramId,
+          updatedUser._id.toString(),
+          walletAddress,
+        );
+      } catch (notificationError) {
+        // Log error but don't fail the request
+        console.error(
+          "Failed to publish wallet linked notification:",
+          notificationError,
+        );
+      }
+
       res.status(200).json({
         success: true,
         message: "Wallet linked successfully",
@@ -381,6 +396,7 @@ export class AuthController {
     try {
       const user = req.user as IUser;
       const userId = user._id.toString();
+      const walletAddress = user.walletAddress; // Store before unlinking
 
       const updatedUser = await UserService.unlinkWallet(userId);
 
@@ -390,6 +406,23 @@ export class AuthController {
           message: "User not found",
         });
         return;
+      }
+
+      // Publish wallet unlinked notification
+      if (walletAddress) {
+        try {
+          await notificationService.publishWalletUnlinked(
+            updatedUser.telegramId,
+            updatedUser._id.toString(),
+            walletAddress,
+          );
+        } catch (notificationError) {
+          // Log error but don't fail the request
+          console.error(
+            "Failed to publish wallet unlinked notification:",
+            notificationError,
+          );
+        }
       }
 
       res.status(200).json({

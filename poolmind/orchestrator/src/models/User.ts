@@ -46,7 +46,6 @@ import mongoose, { Document, Schema } from "mongoose";
  *           type: string
  *           format: date-time
  */
-
 export interface IUser extends Document<mongoose.Types.ObjectId> {
   telegramId: string;
   username: string;

@@ -4,7 +4,11 @@ import { config } from "./index";
 
 const logger = winston.createLogger({
   level: config.logging.level,
-  format: winston.format.json(),
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.errors({ stack: true }),
+    winston.format.json(),
+  ),
   transports: [
     new winston.transports.Console(),
     new winston.transports.File({

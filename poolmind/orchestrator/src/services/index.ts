@@ -8,6 +8,9 @@ export * from "../types/contract";
 // User Service (existing)
 export { UserService } from "./userService";
 
+// Notification Service
+export { notificationService } from "./notificationService";
+
 // Import for singleton instances
 import { PoolMindContractService } from "./poolmindContractService";
 

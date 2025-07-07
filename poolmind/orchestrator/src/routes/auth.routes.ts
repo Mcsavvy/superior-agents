@@ -36,6 +36,10 @@ router.post(
 );
 router.delete("/wallet", authenticateToken, AuthController.unlinkWallet);
 
-router.get("/wallet/connect-url", authenticateToken, AuthController.getConnectUrl);
+router.get(
+  "/wallet/connect-url",
+  authenticateToken,
+  AuthController.getConnectUrl,
+);
 
 export default router;

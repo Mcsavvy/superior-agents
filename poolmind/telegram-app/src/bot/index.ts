@@ -2,6 +2,7 @@ import { Telegraf } from 'telegraf';
 import { config } from '../config/env';
 import { logger, logError } from '../utils/logger';
 import { authService } from '../services/auth';
+import NotificationSubscriber from '../services/notificationSubscriber';
 import {
   sessionMiddleware,
   activityMiddleware,
@@ -22,12 +23,12 @@ import {
   handleWalletCallback,
   handleToggleAllNotifications,
   handleNotificationSettings,
-  handleWalletAddressInput,
 } from './commands/profile';
 import { handleMainMenuCallback } from './callbacks/menu';
 
 class PoolMindBot {
   private bot: Telegraf<SessionContext>;
+  private notificationSubscriber: NotificationSubscriber;
 
   constructor() {
     // Configure bot with custom handler timeout for slow networks
@@ -35,10 +36,12 @@ class PoolMindBot {
       handlerTimeout: 90_000, // 90 seconds for handlers
     });
 
+    // Initialize notification subscriber
+    this.notificationSubscriber = new NotificationSubscriber(this.bot);
+
     this.setupMiddleware();
     this.setupCommands();
     this.setupCallbackHandlers();
-    this.setupWebSocketHandlers();
     this.setupScheduledTasks();
   }
 
@@ -224,12 +227,9 @@ Let's get started! 🚀`;
       }
     });
 
-    // Handle text messages for wallet address input
+    // Handle text messages for profile editing
     this.bot.on('text', async ctx => {
-      if (ctx.session?.step === 'awaiting_wallet_address') {
-        const walletAddress = ctx.message.text.trim();
-        await handleWalletAddressInput(ctx, walletAddress);
-      } else if (ctx.session?.step === 'awaiting_firstname') {
+      if (ctx.session?.step === 'awaiting_firstname') {
         const firstName = ctx.message.text.trim();
         await this.handleFirstNameInput(ctx, firstName);
       } else if (ctx.session?.step === 'awaiting_lastname') {
@@ -278,66 +278,6 @@ Let's get started! 🚀`;
     });
   }
 
-  private setupWebSocketHandlers(): void {}
-
-  private async handlePoolUpdate(update: any): Promise<void> {
-    try {
-      logger.info('Pool update received:', update);
-    } catch (error) {
-      logError('Error handling pool update:', error);
-    }
-  }
-
-  private async handleTradeExecuted(trade: any): Promise<void> {
-    try {
-      logger.info('Trade executed:', trade);
-    } catch (error) {
-      logError('Error handling trade notification:', error);
-    }
-  }
-
-  private async handleProfitDistribution(distribution: any): Promise<void> {
-    try {
-      logger.info('Profit distribution:', distribution);
-
-      // Notify affected users about their profit distribution
-      const notificationMessage =
-        `💰 <b>Profit Distributed</b>\n\n` +
-        `Daily profits have been distributed to your account!\n\n` +
-        `💵 Your Share: $${distribution.userShare?.toFixed(2) || '0.00'}\n` +
-        `📊 Pool: ${distribution.poolName}\n` +
-        `📈 Total Distributed: $${distribution.totalAmount.toFixed(2)}`;
-
-      // Send to specific user
-      if (distribution.userId) {
-        try {
-          await this.bot.telegram.sendMessage(
-            distribution.userId,
-            notificationMessage,
-            {
-              parse_mode: 'HTML',
-            }
-          );
-        } catch (error) {
-          logError(
-            `Failed to send profit notification to user ${distribution.userId}:`,
-            error
-          );
-        }
-      }
-    } catch (error) {
-      logError('Error handling profit distribution:', error);
-    }
-  }
-
-  private async handleSystemAlert(alert: any): Promise<void> {
-    try {
-      logger.info('System alert:', alert);
-    } catch (error) {
-      logError('Error handling system alert:', error);
-    }
-  }
-
   private setupScheduledTasks(): void {
     // Clean up expired sessions every hour
     setInterval(
@@ -370,6 +310,21 @@ Let's get started! 🚀`;
       process.once('SIGINT', () => this.stop('SIGINT'));
       process.once('SIGTERM', () => this.stop('SIGTERM'));
 
+      // Start the notification subscriber
+      if (config.redis.url) {
+        try {
+          await this.notificationSubscriber.start();
+          logger.info('Notification subscriber started successfully');
+        } catch (error) {
+          logger.error('Failed to start notification subscriber:', error);
+          logger.warn('Bot will continue without notifications');
+        }
+      } else {
+        logger.warn(
+          'Redis URL not configured, notification subscriber disabled'
+        );
+      }
+
       // Start the bot with retry logic for network issues
       await this.startBotWithRetry();
 
@@ -388,20 +343,11 @@ Let's get started! 🚀`;
           `Attempting to start bot (attempt ${attempt}/${maxRetries})...`
         );
 
-        if (config.bot.webhookUrl) {
-          // Production: Use webhooks
-          await this.bot.launch({
-            webhook: {
-              domain: config.bot.webhookUrl,
-              port: config.server.port,
-            },
-          });
-          logger.info(`Bot started with webhook: ${config.bot.webhookUrl}`);
-        } else {
-          // Development: Use polling
-          await this.bot.launch();
-          logger.info('Bot started with polling');
-        }
+        await this.bot.launch();
+        logger.info('Bot started with polling');
+        logger.info(
+          `Bot launched successfully: @${this.bot.botInfo?.username}`
+        );
 
         return; // Success, exit retry loop
       } catch (error: any) {
@@ -561,6 +507,12 @@ Let's get started! 🚀`;
     logger.info(`Received ${signal}. Graceful shutdown...`);
 
     try {
+      // Stop notification subscriber
+      if (this.notificationSubscriber) {
+        await this.notificationSubscriber.stop();
+        logger.info('Notification subscriber stopped');
+      }
+
       // Stop the bot
       this.bot.stop(signal);
       logger.info('Bot stopped gracefully');

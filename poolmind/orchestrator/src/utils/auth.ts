@@ -103,7 +103,7 @@ export class AuthUtils {
 
       const payload = jwt.verify(token, this.JWT_SECRET) as JWTPayload;
 
-      logger.info("JWT token verified successfully", {
+      logger.debug("JWT token verified successfully", {
         userId: payload.userId,
         telegramId: payload.telegramId,
         username: payload.username,
@@ -325,7 +325,7 @@ export class AuthUtils {
       });
 
       if (!authHeader) {
-        logger.debug("No Authorization header provided");
+        logger.warn("No Authorization header provided");
         return null;
       }
 

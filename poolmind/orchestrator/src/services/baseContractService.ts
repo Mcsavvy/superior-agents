@@ -18,7 +18,7 @@ import {
   someCV,
   noneCV,
 } from "@stacks/transactions";
-import { config } from "../config";
+import { config, stacks, contractCall as contractCallConfig } from "../config";
 import { ContractCallOptions, TransactionResult } from "../types/contract";
 
 export class BaseContractService {
@@ -63,7 +63,7 @@ export class BaseContractService {
     functionArgs: any[],
     options: ContractCallOptions,
   ): Promise<TransactionResult> {
-    try {
+    const doCall = async (): Promise<TransactionResult> => {
       const txOptions = {
         contractAddress,
         contractName,
@@ -94,6 +94,18 @@ export class BaseContractService {
         success: true,
         result: broadcastResponse,
       };
+    };
+
+    try {
+      if (stacks.network !== "devnet") {
+        return await this.retry(
+          doCall,
+          contractCallConfig.retryCount,
+          contractCallConfig.retryDelayMs,
+          functionName,
+        );
+      }
+      return await doCall();
     } catch (error) {
       return {
         txId: "",
@@ -114,7 +126,7 @@ export class BaseContractService {
     functionArgs: any[] = [],
     senderAddress?: string,
   ): Promise<any> {
-    try {
+    const readOnlyCall = async () => {
       const result = await fetchCallReadOnlyFunction({
         contractAddress,
         contractName,
@@ -125,10 +137,47 @@ export class BaseContractService {
       });
 
       return cvToValue(result);
+    };
+
+    try {
+      if (stacks.network !== "devnet") {
+        return await this.retry(
+          readOnlyCall,
+          contractCallConfig.retryCount,
+          contractCallConfig.retryDelayMs,
+          functionName,
+        );
+      }
+      return await readOnlyCall();
     } catch (error) {
       console.error(`Error calling read-only function ${functionName}:`, error);
       throw error;
     }
+  }
+
+  private async retry<T>(
+    fn: () => Promise<T>,
+    retries: number,
+    delay: number,
+    functionName: string,
+  ): Promise<T> {
+    let lastError: Error | undefined;
+    for (let i = 0; i < retries; i++) {
+      try {
+        return await fn();
+      } catch (error) {
+        lastError = error as Error;
+        if (i < retries - 1) {
+          console.warn(
+            `Retry attempt ${i + 1} for ${functionName} after error: ${
+              lastError.message
+            }. Retrying in ${delay}ms...`,
+          );
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
+    }
+    throw lastError;
   }
 
   /**

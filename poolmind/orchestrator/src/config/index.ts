@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import { z } from "zod";
+import { privateKeyToAddress } from "@stacks/transactions";
 
 // Load environment variables
 dotenv.config();
@@ -16,15 +17,13 @@ const envSchema = z.object({
     .string()
     .transform((val) => val === "true")
     .default("false"),
+  APP_URL: z.string().min(1, "APP_URL is required"),
+  FRONTEND_URL: z.string().optional(),
   // Database Configuration
   MONGODB_URI: z.string().min(1, "MONGODB_URI is required"),
 
   // Redis Configuration
-  REDIS_HOST: z.string().default("localhost"),
-  REDIS_PORT: z.string().transform(Number).default("6379"),
-  REDIS_PASSWORD: z.string().optional(),
-  REDIS_DB: z.string().transform(Number).default("0"),
-  REDIS_URL: z.string().optional(),
+  REDIS_URL: z.string().min(1, "REDIS_URL is required"),
 
   // Authentication Configuration
   JWT_SECRET: z
@@ -39,13 +38,17 @@ const envSchema = z.object({
 
   // Stacks Network Configuration
   STACKS_NETWORK: z.enum(["mainnet", "testnet", "devnet"]).default("devnet"),
-  STACKS_API_URL: z.string().optional(),
 
   // Smart Contract Configuration
   POOLMIND_CONTRACT_ADDRESS: z
     .string()
     .min(1, "POOLMIND_CONTRACT_ADDRESS is required"),
-  POOLMIND_CONTRACT_NAME: z.string().default("poolmind"),
+  POOLMIND_CONTRACT_NAME: z
+    .string()
+    .min(1, "POOLMIND_CONTRACT_NAME is required"),
+  POOLMIND_ADMIN_PRIVATE_KEY: z
+    .string()
+    .min(1, "POOLMIND_ADMIN_PRIVATE_KEY is required"),
 
   // Logging Configuration
   LOG_LEVEL: z.enum(["error", "warn", "info", "debug"]).default("info"),
@@ -57,9 +60,12 @@ const envSchema = z.object({
   BCRYPT_SALT_ROUNDS: z.string().transform(Number).default("12"),
   RATE_LIMIT_WINDOW_MS: z.string().transform(Number).default("900000"), // 15 minutes
   RATE_LIMIT_MAX_REQUESTS: z.string().transform(Number).default("100"),
+  HMAC_SECRET: z
+    .string()
+    .min(32, "HMAC_SECRET must be at least 32 characters long"),
 
   // CORS Configuration
-  CORS_ORIGIN: z.string().default("*"),
+  CORS_ORIGIN: z.string().default(""),
   CORS_CREDENTIALS: z
     .string()
     .transform((val) => val === "true")
@@ -73,16 +79,9 @@ const envSchema = z.object({
   QUEUE_REDIS_URL: z.string().optional(),
   QUEUE_CONCURRENCY: z.string().transform(Number).default("5"),
 
-  // Health Check Configuration
-  HEALTH_CHECK_INTERVAL: z.string().transform(Number).default("30000"), // 30 seconds
-
-  // File Upload Configuration
-  MAX_FILE_SIZE: z.string().transform(Number).default("5242880"), // 5MB
-  UPLOAD_PATH: z.string().default("uploads/"),
-
-  // External API Configuration
-  EXTERNAL_API_TIMEOUT: z.string().transform(Number).default("10000"), // 10 seconds
-  EXTERNAL_API_RETRIES: z.string().transform(Number).default("3"),
+  // Contract Call Configuration
+  CONTRACT_CALL_RETRY_COUNT: z.string().transform(Number).default("3"),
+  CONTRACT_CALL_RETRY_DELAY_MS: z.string().transform(Number).default("1000"), // 1 second
 });
 
 // Validate environment variables
@@ -106,18 +105,11 @@ export const config = {
     port: env.PORT,
     host: env.HOST,
     useHttps: env.USE_HTTPS,
+    appUrl: env.APP_URL,
     isProduction: env.NODE_ENV === "production",
     isDevelopment: env.NODE_ENV === "development",
     isTest: env.NODE_ENV === "test",
-    getBaseUrl: () => {
-      if (env.USE_HTTPS) {
-        return `https://${env.HOST}:${env.PORT}`;
-      }
-      if (env.PORT === 443) {
-        return `https://${env.HOST}`;
-      }
-      return `http://${env.HOST}:${env.PORT}`;
-    },
+    frontendUrl: env.NODE_ENV === "production" ? env.FRONTEND_URL : undefined,
   },
 
   // Database settings
@@ -132,13 +124,7 @@ export const config = {
 
   // Redis settings
   redis: {
-    host: env.REDIS_HOST,
-    port: env.REDIS_PORT,
-    password: env.REDIS_PASSWORD,
-    db: env.REDIS_DB,
-    url:
-      env.REDIS_URL ||
-      `redis://${env.REDIS_HOST}:${env.REDIS_PORT}/${env.REDIS_DB}`,
+    url: env.REDIS_URL,
   },
 
   // Authentication settings
@@ -165,6 +151,8 @@ export const config = {
     poolmind: {
       address: env.POOLMIND_CONTRACT_ADDRESS,
       name: env.POOLMIND_CONTRACT_NAME,
+      adminPrivateKey: env.POOLMIND_ADMIN_PRIVATE_KEY,
+      adminAddress: privateKeyToAddress(env.POOLMIND_ADMIN_PRIVATE_KEY),
     },
   },
 
@@ -188,6 +176,7 @@ export const config = {
       origin: env.CORS_ORIGIN === "*" ? true : env.CORS_ORIGIN.split(","),
       credentials: env.CORS_CREDENTIALS,
     },
+    hmacSecret: env.HMAC_SECRET,
   },
 
   // API settings
@@ -199,28 +188,14 @@ export const config = {
 
   // Queue settings
   queue: {
-    redisUrl:
-      env.QUEUE_REDIS_URL ||
-      env.REDIS_URL ||
-      `redis://${env.REDIS_HOST}:${env.REDIS_PORT}/${env.REDIS_DB}`,
+    redisUrl: env.QUEUE_REDIS_URL || env.REDIS_URL,
     concurrency: env.QUEUE_CONCURRENCY,
   },
 
-  // Health check settings
-  healthCheck: {
-    interval: env.HEALTH_CHECK_INTERVAL,
-  },
-
-  // File upload settings
-  upload: {
-    maxFileSize: env.MAX_FILE_SIZE,
-    path: env.UPLOAD_PATH,
-  },
-
-  // External API settings
-  externalApi: {
-    timeout: env.EXTERNAL_API_TIMEOUT,
-    retries: env.EXTERNAL_API_RETRIES,
+  // Contract call settings
+  contractCall: {
+    retryCount: env.CONTRACT_CALL_RETRY_COUNT,
+    retryDelayMs: env.CONTRACT_CALL_RETRY_DELAY_MS,
   },
 } as const;
 
@@ -236,9 +211,7 @@ export const {
   security,
   api,
   queue,
-  healthCheck,
-  upload,
-  externalApi,
+  contractCall,
 } = config;
 
 // Export environment validation schema for testing

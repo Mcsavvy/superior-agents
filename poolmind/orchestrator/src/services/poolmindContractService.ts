@@ -26,87 +26,8 @@ export class PoolMindContractService extends BaseContractService {
 
   constructor() {
     super();
-    this.contractAddress = config.contracts.poolmind.address.split(".")[0];
+    this.contractAddress = config.contracts.poolmind.address;
     this.contractName = config.contracts.poolmind.name;
-  }
-
-  // ============================
-  // USER FUNCTIONS
-  // ============================
-
-  /**
-   * Deposit STX and receive PoolMind tokens
-   */
-  async deposit(
-    params: DepositParams,
-    options: ContractCallOptions,
-  ): Promise<DepositResult> {
-    const functionArgs = [BaseContractService.createUintCV(params.amountStx)];
-
-    const result = await this.makeContractCall(
-      this.contractAddress,
-      this.contractName,
-      "deposit",
-      functionArgs,
-      options,
-    );
-
-    return {
-      ...result,
-      stxAmount: params.amountStx,
-    } as DepositResult;
-  }
-
-  /**
-   * Withdraw STX by burning PoolMind tokens
-   */
-  async withdraw(
-    params: WithdrawParams,
-    options: ContractCallOptions,
-  ): Promise<WithdrawResult> {
-    const functionArgs = [
-      BaseContractService.createUintCV(params.amountShares),
-    ];
-
-    const result = await this.makeContractCall(
-      this.contractAddress,
-      this.contractName,
-      "withdraw",
-      functionArgs,
-      options,
-    );
-
-    return {
-      ...result,
-      sharesBurned: params.amountShares,
-    } as WithdrawResult;
-  }
-
-  /**
-   * Transfer PoolMind tokens to another address
-   */
-  async transfer(
-    params: TransferParams,
-    options: ContractCallOptions,
-  ): Promise<TransactionResult> {
-    const functionArgs = [
-      BaseContractService.createUintCV(params.amount),
-      BaseContractService.createPrincipalCV(options.senderKey), // sender
-      BaseContractService.createPrincipalCV(params.recipient),
-      params.memo
-        ? BaseContractService.createOptionalCV(
-            BaseContractService.createBufferCV(params.memo),
-          )
-        : BaseContractService.createOptionalCV(null),
-    ];
-
-    return await this.makeContractCall(
-      this.contractAddress,
-      this.contractName,
-      "transfer",
-      functionArgs,
-      options,
-    );
   }
 
   // ============================

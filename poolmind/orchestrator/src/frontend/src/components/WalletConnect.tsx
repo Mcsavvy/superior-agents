@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { connect, disconnect, isConnected, getLocalStorage } from "@stacks/connect";
+import {
+  connect,
+  disconnect,
+  isConnected,
+  getLocalStorage,
+} from "@stacks/connect";
 import {
   isMobile,
   hasStacksWallet,
@@ -8,7 +13,12 @@ import {
   openXverseDeepLink,
   getCompatibleWallets,
 } from "../utils/mobile";
-import { linkWalletAddress, getUserProfile, setAuthToken, getAuthToken } from "../utils/api";
+import {
+  linkWalletAddress,
+  getUserProfile,
+  setAuthToken,
+  getAuthToken,
+} from "../utils/api";
 import type { WalletState } from "../types/wallet";
 
 const NETWORK = import.meta.env.VITE_STACKS_NETWORK || "mainnet";
@@ -55,19 +65,19 @@ const WalletConnect: React.FC = () => {
         } else {
           setIsAuthenticated(false);
           // If we can't fetch profile, redirect to unauthenticated page
-          navigate('/auth/login');
+          navigate("/auth/login");
           return;
         }
       } else {
         setIsAuthenticated(false);
         // No token available, redirect to unauthenticated page
-        navigate('/auth/login');
+        navigate("/auth/login");
         return;
       }
     } catch (error) {
       console.error("Auth check error:", error);
       setIsAuthenticated(false);
-      navigate('/auth/login');
+      navigate("/auth/login");
     } finally {
       setAuthChecked(true);
     }
@@ -277,10 +287,14 @@ const WalletConnect: React.FC = () => {
     return (
       <div className="min-h-screen flex items-center justify-center p-5 bg-gradient-to-br from-[#667eea] to-[#764ba2] font-sans">
         <div className="bg-white rounded-2xl p-8 shadow-2xl max-w-lg w-full text-center">
-          <h2 className="mb-4 text-gray-800 text-2xl font-semibold">❌ Authentication Required</h2>
-          <p className="text-gray-600 mb-6">You need to be authenticated to connect your wallet.</p>
+          <h2 className="mb-4 text-gray-800 text-2xl font-semibold">
+            ❌ Authentication Required
+          </h2>
+          <p className="text-gray-600 mb-6">
+            You need to be authenticated to connect your wallet.
+          </p>
           <button
-            onClick={() => navigate('/auth/login')}
+            onClick={() => navigate("/auth/login")}
             className="bg-blue-500 hover:bg-blue-600 text-white border-none py-2.5 px-5 rounded-md text-sm cursor-pointer transition-all duration-200"
           >
             Go to Login
@@ -294,7 +308,9 @@ const WalletConnect: React.FC = () => {
     return (
       <div className="min-h-screen flex items-center justify-center p-5 bg-gradient-to-br from-[#667eea] to-[#764ba2] font-sans">
         <div className="bg-white rounded-2xl p-8 shadow-2xl max-w-lg w-full text-center">
-          <h2 className="mb-4 text-gray-800 text-2xl font-semibold">✅ Wallet Connected Successfully!</h2>
+          <h2 className="mb-4 text-gray-800 text-2xl font-semibold">
+            ✅ Wallet Connected Successfully!
+          </h2>
           <div className="bg-gray-50 p-4 rounded-lg my-5 text-left">
             <p className="my-2 font-mono text-sm break-all">
               <strong>Address:</strong> {walletState.address}
@@ -304,15 +320,16 @@ const WalletConnect: React.FC = () => {
             </p>
             {walletState.publicKey && (
               <p className="my-2 font-mono text-xs break-all">
-                <strong>Public Key:</strong> {walletState.publicKey.substring(0, 20)}...
+                <strong>Public Key:</strong>{" "}
+                {walletState.publicKey.substring(0, 20)}...
               </p>
             )}
           </div>
-                    <p className="text-gray-600 mb-6 leading-relaxed">
-            Your wallet address has been linked to your profile. 
-            {redirectUrl && redirectUrl !== "/wallet/connect" ? 
-              " You will be redirected shortly." : 
-              " You can now close this window."}
+          <p className="text-gray-600 mb-6 leading-relaxed">
+            Your wallet address has been linked to your profile.
+            {redirectUrl && redirectUrl !== "/wallet/connect"
+              ? " You will be redirected shortly."
+              : " You can now close this window."}
           </p>
           <button
             onClick={handleDisconnect}
@@ -329,8 +346,12 @@ const WalletConnect: React.FC = () => {
     return (
       <div className="min-h-screen flex items-center justify-center p-5 bg-gradient-to-br from-[#667eea] to-[#764ba2] font-sans">
         <div className="bg-white rounded-2xl p-8 shadow-2xl max-w-lg w-full text-center">
-          <h2 className="mb-4 text-gray-800 text-2xl font-semibold">🔗 Connect Your Wallet</h2>
-          <p className="text-gray-600 mb-6 leading-relaxed">We detected you're on a mobile device.</p>
+          <h2 className="mb-4 text-gray-800 text-2xl font-semibold">
+            🔗 Connect Your Wallet
+          </h2>
+          <p className="text-gray-600 mb-6 leading-relaxed">
+            We detected you're on a mobile device.
+          </p>
 
           {xverseInstalled ? (
             <div className="mb-6">
@@ -344,7 +365,9 @@ const WalletConnect: React.FC = () => {
             </div>
           ) : (
             <div className="text-left">
-              <h3 className="text-lg font-semibold text-gray-800 mb-3">Option 1: Install Xverse Wallet</h3>
+              <h3 className="text-lg font-semibold text-gray-800 mb-3">
+                Option 1: Install Xverse Wallet
+              </h3>
               <p className="text-gray-600 mb-4 leading-relaxed">
                 ⚠️ You need to have Xverse wallet installed to use this feature.
               </p>
@@ -361,7 +384,9 @@ const WalletConnect: React.FC = () => {
                 Install Xverse Wallet
               </button>
 
-              <h3 className="text-lg font-semibold text-gray-800 mb-3">Option 2: Use Another Compatible Wallet</h3>
+              <h3 className="text-lg font-semibold text-gray-800 mb-3">
+                Option 2: Use Another Compatible Wallet
+              </h3>
               <p className="text-gray-600 mb-4 leading-relaxed">
                 If you have another Stacks-compatible wallet, copy this URL and
                 paste it in your wallet's browser:
@@ -382,10 +407,15 @@ const WalletConnect: React.FC = () => {
               </div>
 
               <div className="mb-6">
-                <h4 className="text-base font-semibold text-gray-800 mb-3">Compatible Wallets:</h4>
+                <h4 className="text-base font-semibold text-gray-800 mb-3">
+                  Compatible Wallets:
+                </h4>
                 <ul className="list-none p-0 m-0">
                   {compatibleWallets.map((wallet, index) => (
-                    <li key={index} className="my-2 flex items-center justify-between">
+                    <li
+                      key={index}
+                      className="my-2 flex items-center justify-between"
+                    >
                       <a
                         href={wallet.url}
                         target="_blank"
@@ -395,8 +425,16 @@ const WalletConnect: React.FC = () => {
                         {wallet.name}
                       </a>
                       <div>
-                        {wallet.mobile && <span className="bg-gray-200 text-gray-600 py-0.5 px-2 rounded-full text-xs ml-2">Mobile</span>}
-                        {wallet.browser && <span className="bg-gray-200 text-gray-600 py-0.5 px-2 rounded-full text-xs ml-2">Browser</span>}
+                        {wallet.mobile && (
+                          <span className="bg-gray-200 text-gray-600 py-0.5 px-2 rounded-full text-xs ml-2">
+                            Mobile
+                          </span>
+                        )}
+                        {wallet.browser && (
+                          <span className="bg-gray-200 text-gray-600 py-0.5 px-2 rounded-full text-xs ml-2">
+                            Browser
+                          </span>
+                        )}
                       </div>
                     </li>
                   ))}
@@ -419,8 +457,12 @@ const WalletConnect: React.FC = () => {
   return (
     <div className="min-h-screen flex items-center justify-center p-5 bg-gradient-to-br from-[#667eea] to-[#764ba2] font-sans">
       <div className="bg-white rounded-2xl p-8 shadow-2xl max-w-lg w-full text-center">
-        <h2 className="mb-4 text-gray-800 text-2xl font-semibold">🔗 Connect Your Stacks Wallet</h2>
-        <p className="text-gray-600 mb-6 leading-relaxed">Connect your wallet to authenticate with PoolMind.</p>
+        <h2 className="mb-4 text-gray-800 text-2xl font-semibold">
+          🔗 Connect Your Stacks Wallet
+        </h2>
+        <p className="text-gray-600 mb-6 leading-relaxed">
+          Connect your wallet to authenticate with PoolMind.
+        </p>
 
         {walletState.error && (
           <div className="bg-red-100 text-red-600 py-3 px-4 rounded-lg mb-5 border border-red-200">
@@ -439,9 +481,13 @@ const WalletConnect: React.FC = () => {
             </button>
           ) : (
             <div className="text-left">
-              <p className="text-gray-600 mb-4 leading-relaxed">⚠️ No Stacks wallet detected in your browser.</p>
+              <p className="text-gray-600 mb-4 leading-relaxed">
+                ⚠️ No Stacks wallet detected in your browser.
+              </p>
               <div className="mb-6">
-                <h4 className="text-base font-semibold text-gray-800 mb-3">Install a Stacks Wallet:</h4>
+                <h4 className="text-base font-semibold text-gray-800 mb-3">
+                  Install a Stacks Wallet:
+                </h4>
                 <ul className="list-none p-0 m-0">
                   {compatibleWallets
                     .filter((w) => w.browser)

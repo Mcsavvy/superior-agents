@@ -16,8 +16,8 @@ const options: swaggerJsdoc.Options = {
     },
     servers: [
       {
-        url: `http://${config.server.host}:${config.server.port}`,
-        description: "Development server",
+        url: config.server.appUrl,
+        description: config.server.isDevelopment ? "Development server" : "Production server",
       },
     ],
     components: {
@@ -27,6 +27,13 @@ const options: swaggerJsdoc.Options = {
           scheme: "bearer",
           bearerFormat: "JWT",
           description: "Enter JWT token",
+        },
+        hmacAuth: {
+          type: "apiKey",
+          in: "header",
+          name: "x-signature",
+          description:
+            "HMAC-SHA256 signature in format: sha256=<signature>. Also requires x-timestamp header.",
         },
       },
       schemas: {
@@ -348,12 +355,16 @@ const options: swaggerJsdoc.Options = {
         description: "Token and wallet balance queries",
       },
       {
-        name: "Pool Operations",
+        name: "Pool",
         description: "Pool deposits, withdrawals, and balance queries",
       },
       {
-        name: "Admin",
-        description: "Administrative operations",
+        name: "Transactions",
+        description: "Track blockchain transactions",
+      },
+      {
+        name: "Fund Request",
+        description: "Secure fund request endpoints for trading bot",
       },
     ],
   },

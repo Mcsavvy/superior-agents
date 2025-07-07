@@ -60,8 +60,16 @@ plan:
     - id: 0
       transactions:
         - emulated-contract-publish:
-            contract-name: poolmind
-            emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            path: contracts/poolmind.clar
+            contract-name: sip-010-trait-ft-standard
+            emulated-sender: SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE
+            path: "./.cache/requirements/SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.sip-010-trait-ft-standard.clar"
             clarity-version: 1
-      epoch: "2.1"
+      epoch: "2.0"
+    - id: 1
+      transactions:
+        - emulated-contract-publish:
+            contract-name: poolmind-v1-2
+            emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
+            path: contracts/poolmind-v1-2.clar
+            clarity-version: 3
+      epoch: "3.1"

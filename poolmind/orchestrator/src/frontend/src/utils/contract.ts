@@ -1,10 +1,6 @@
-import { request } from '@stacks/connect';
-import { Cl } from '@stacks/transactions';
-
-// Contract constants - adjust these to match your deployed contract
-const CONTRACT_ADDRESS = import.meta.env.VITE_POOLMIND_CONTRACT_ADDRESS!; // Replace with your actual contract address
-const CONTRACT_NAME = import.meta.env.VITE_POOLMIND_CONTRACT_NAME || 'poolmind';
-const NETWORK = import.meta.env.VITE_STACKS_NETWORK!;
+import { request, getLocalStorage } from "@stacks/connect";
+import { Cl } from "@stacks/transactions";
+import config from "../config";
 
 export interface DepositResult {
   txid: string;
@@ -17,43 +13,96 @@ export interface WithdrawResult {
 }
 
 /**
+ * Get the current user's STX address
+ */
+const getCurrentUserAddress = (): string => {
+  const userData = getLocalStorage();
+  const address = userData?.addresses?.stx?.[0]?.address;
+  if (!address) {
+    throw new Error("No wallet address found. Please connect your wallet.");
+  }
+  return address;
+};
+
+/**
  * Deposit STX to the pool and receive PoolMind tokens
  */
-export const depositToPool = async (amountStx: string): Promise<DepositResult> => {
+export const depositToPool = async (
+  amountStx: string,
+): Promise<DepositResult> => {
   try {
-    const response = await request('stx_callContract', {
-      contract: `${CONTRACT_ADDRESS}.${CONTRACT_NAME}`,
-      functionName: 'deposit',
+    const userAddress = getCurrentUserAddress();
+    console.log("userAddress", userAddress);
+
+    // Create post conditions for safety
+    const postConditions = [
+      // STX post condition - user sends at least the specified amount
+      {
+        type: "stx-postcondition" as const,
+        address: userAddress,
+        condition: "gte" as const,
+        amount: amountStx,
+      },
+    ];
+
+    const response = await request("stx_callContract", {
+      contract: `${config.poolmindContractAddress}.${config.poolmindContractName}`,
+      functionName: "deposit",
       functionArgs: [Cl.uint(amountStx)],
-      network: NETWORK,
+      network: config.stacksNetwork,
+      postConditions,
+      postConditionMode: "deny",
     });
 
     return {
-      txid: response.txid || '',
+      txid: response.txid || "",
     };
   } catch (error) {
-    console.error('Deposit failed:', error);
-    throw new Error(error instanceof Error ? error.message : 'Failed to deposit');
+    console.error("Deposit failed:", error);
+    throw new Error(
+      error instanceof Error ? error.message : "Failed to deposit",
+    );
   }
 };
 
 /**
  * Withdraw STX from the pool by burning PoolMind tokens
  */
-export const withdrawFromPool = async (amountShares: string): Promise<WithdrawResult> => {
+export const withdrawFromPool = async (
+  amountShares: string,
+): Promise<WithdrawResult> => {
   try {
-    const response = await request('stx_callContract', {
-      contract: `${CONTRACT_ADDRESS}.${CONTRACT_NAME}`,
-      functionName: 'withdraw',
+    const userAddress = getCurrentUserAddress();
+
+    // Create post conditions for safety
+    const postConditions = [
+      // Fungible token post condition - user sends PLMD tokens
+      {
+        type: "ft-postcondition" as const,
+        address: userAddress,
+        condition: "gte" as const,
+        amount: amountShares,
+        asset:
+          `${config.poolmindContractAddress}.${config.poolmindContractName}::PoolMind` as const,
+      },
+    ];
+
+    const response = await request("stx_callContract", {
+      contract: `${config.poolmindContractAddress}.${config.poolmindContractName}`,
+      functionName: "withdraw",
       functionArgs: [Cl.uint(amountShares)],
-      network: NETWORK,
+      network: config.stacksNetwork,
+      postConditions,
+      postConditionMode: "allow",
     });
 
     return {
-      txid: response.txid || '',
+      txid: response.txid || "",
     };
   } catch (error) {
-    console.error('Withdraw failed:', error);
-    throw new Error(error instanceof Error ? error.message : 'Failed to withdraw');
+    console.error("Withdraw failed:", error);
+    throw new Error(
+      error instanceof Error ? error.message : "Failed to withdraw",
+    );
   }
 };

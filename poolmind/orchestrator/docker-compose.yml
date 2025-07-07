@@ -1,64 +1,85 @@
-version: '3.8'
+version: '3.3'
 
 services:
-  app:
-    build: .
+  orchestrator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+      args:
+        NODE_ENV: ${NODE_ENV:-production}
+        STACKS_NETWORK: ${STACKS_NETWORK:-devnet}
+        POOLMIND_CONTRACT_ADDRESS: ${POOLMIND_CONTRACT_ADDRESS}
+        POOLMIND_CONTRACT_NAME: ${POOLMIND_CONTRACT_NAME}
+    container_name: orchestrator-app
+    restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "${EXTERNAL_PORT}:${PORT}"
+    expose:
+      - "${EXTERNAL_PORT}"
     environment:
-      - NODE_ENV=production
-      - PORT=3000
-      - MONGODB_URI=mongodb://mongo:27017/poolmind
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - POOLMIND_CONTRACT_ADDRESS=${POOLMIND_CONTRACT_ADDRESS}
-    depends_on:
-      - mongo
-      - redis
+      # Server Configuration
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: ${PORT:-3000}
+      HOST: ${HOST:-0.0.0.0}
+      EXTERNAL_PORT: ${EXTERNAL_PORT:-30001}
+      APP_URL: ${APP_URL}
+      USE_HTTPS: ${USE_HTTPS:-false}
+      
+      # Database Configuration (external)
+      MONGODB_URI: ${MONGODB_URI}
+      
+      # Redis Configuration (external)
+      REDIS_URL: ${REDIS_URL}
+      
+      # Authentication Configuration
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-30d}
+      
+      # Telegram Configuration
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET}
+      
+      # Stacks Network Configuration
+      STACKS_NETWORK: ${STACKS_NETWORK:-devnet}
+      
+      # Smart Contract Configuration
+      POOLMIND_CONTRACT_ADDRESS: ${POOLMIND_CONTRACT_ADDRESS}
+      POOLMIND_CONTRACT_NAME: ${POOLMIND_CONTRACT_NAME}
+      POOLMIND_ADMIN_PRIVATE_KEY: ${POOLMIND_ADMIN_PRIVATE_KEY}
+      
+      # Logging Configuration
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FILE_ERROR: logs/error.log
+      LOG_FILE_COMBINED: logs/combined.log
+      LOG_FILE_AUTH: logs/auth-combined.log
+      
+      # Security Configuration
+      BCRYPT_SALT_ROUNDS: ${BCRYPT_SALT_ROUNDS:-12}
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-900000}
+      RATE_LIMIT_MAX_REQUESTS: ${RATE_LIMIT_MAX_REQUESTS:-100}
+      HMAC_SECRET: ${HMAC_SECRET}
+      
+      # API Configuration
+      API_VERSION: ${API_VERSION:-v1}
+      API_PREFIX: ${API_PREFIX:-/api}
+      
+      # Queue Configuration
+      QUEUE_REDIS_URL: ${QUEUE_REDIS_URL}
+      QUEUE_CONCURRENCY: ${QUEUE_CONCURRENCY:-5}
+      
+      # Contract Call Configuration
+      CONTRACT_CALL_RETRY_COUNT: ${CONTRACT_CALL_RETRY_COUNT:-3}
+      CONTRACT_CALL_RETRY_DELAY_MS: ${CONTRACT_CALL_RETRY_DELAY_MS:-1000}
     volumes:
       - ./logs:/app/logs
-    restart: unless-stopped
-
-  mongo:
-    image: mongo:6-alpine
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-      - ./scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
-    environment:
-      - MONGO_INITDB_DATABASE=poolmind
-    restart: unless-stopped
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    command: redis-server --appendonly yes
-    restart: unless-stopped
-
-  # Development override - uncomment for development
-  # app-dev:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile.dev
-  #   ports:
-  #     - "3000:3000"
-  #     - "5173:5173"  # Vite dev server
-  #   environment:
-  #     - NODE_ENV=development
-  #   volumes:
-  #     - .:/app
-  #     - /app/node_modules
-  #     - /app/src/frontend/node_modules
-  #   depends_on:
-  #     - mongo
-  #     - redis
+    healthcheck:
+      test: ["CMD", "node", "-e", "const http = require('http'); const options = { host: 'localhost', port: 3000, path: '/health', timeout: 2000 }; const req = http.request(options, (res) => { if (res.statusCode === 200) process.exit(0); else process.exit(1); }); req.on('error', () => process.exit(1)); req.end();"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
 volumes:
-  mongo_data:
-  redis_data: 
+  logs:
