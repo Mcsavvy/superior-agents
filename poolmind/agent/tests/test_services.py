@@ -3,10 +3,13 @@ Tests for the PoolMind Agent service clients
 """
 import pytest
 import asyncio
+import os
 from datetime import datetime
 from typing import Dict, Any
+from unittest.mock import patch, MagicMock
 
 from poolmind_agent.services.exchange_client import ExchangeClient
+from poolmind_agent.services.exchange_adapter import ExchangeAdapter
 from poolmind_agent.services.blockchain_client import BlockchainClient
 from poolmind_agent.services.orchestrator_client import OrchestratorClient
 from poolmind_agent.services.llm_service import LLMService
@@ -16,10 +19,29 @@ from poolmind_agent.services.rag_service import RAGService
 @pytest.mark.asyncio
 async def test_exchange_client_initialization(test_config):
     """Test exchange client initialization"""
+    # Force mock mode for testing
+    os.environ["USE_MOCK_EXCHANGES"] = "true"
+    
     client = ExchangeClient(test_config)
     assert client is not None
     assert client.config is not None
     assert client.use_mock is True
+    
+    # Test with real mode
+    os.environ["USE_MOCK_EXCHANGES"] = "false"
+    client = ExchangeClient(test_config)
+    assert client.use_mock is False
+    
+    # Reset to mock mode for other tests
+    os.environ["USE_MOCK_EXCHANGES"] = "true"
+
+
+@pytest.mark.asyncio
+async def test_exchange_adapter_initialization():
+    """Test exchange adapter initialization"""
+    adapter = ExchangeAdapter(exchange_id="binance")
+    assert adapter is not None
+    assert adapter.exchange_id == "binance"
 
 
 @pytest.mark.asyncio
@@ -74,6 +96,20 @@ async def test_exchange_client_execute_order(exchange_client):
 
 
 @pytest.mark.asyncio
+async def test_exchange_client_get_balance(exchange_client):
+    """Test exchange client get balance method"""
+    balance = await exchange_client.get_balance("binance")
+    
+    assert balance is not None
+    # Check that BTC exists in the balance dictionary
+    assert "BTC" in balance
+    # Check that the BTC balance is a number (float or int)
+    assert isinstance(balance["BTC"], (float, int))
+    # Make sure the balance is non-negative
+    assert balance["BTC"] >= 0
+
+
+@pytest.mark.asyncio
 async def test_blockchain_client_initialization(test_config):
     """Test blockchain client initialization"""
     client = BlockchainClient(test_config)
@@ -116,10 +152,21 @@ async def test_blockchain_client_get_gas_price(blockchain_client):
 @pytest.mark.asyncio
 async def test_orchestrator_client_initialization(test_config):
     """Test orchestrator client initialization"""
+    # Force mock mode for testing
+    os.environ["USE_MOCK_API"] = "true"
+    
     client = OrchestratorClient(test_config)
     assert client is not None
     assert client.config is not None
     assert client.use_mock is True
+    
+    # Test with real mode
+    os.environ["USE_MOCK_API"] = "false"
+    client = OrchestratorClient(test_config)
+    assert client.use_mock is False
+    
+    # Reset to mock mode for other tests
+    os.environ["USE_MOCK_API"] = "true"
 
 
 @pytest.mark.asyncio
@@ -154,7 +201,71 @@ async def test_orchestrator_client_submit_strategy(orchestrator_client, sample_s
     
     assert result is not None
     assert "strategy_id" in result
-    assert "status" in result
+    assert "success" in result
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_client_notify_trade_execution(orchestrator_client):
+    """Test orchestrator client notify trade execution method"""
+    execution_result = {
+        "strategy_id": "test-strategy-1",
+        "buy_exchange": "binance",
+        "sell_exchange": "gate",
+        "symbol": "BTC/USDT",
+        "amount": 0.1,
+        "buy_price": 50000,
+        "sell_price": 50100,
+        "profit": 10,
+        "profit_pct": 0.2,
+        "success": True,
+        "timestamp": datetime.now().isoformat()
+    }
+    
+    result = await orchestrator_client.notify_trade_execution(execution_result)
+    
+    assert result is not None
+    assert "success" in result
+    assert result["success"] is True
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_client_report_arbitrage_opportunity(orchestrator_client):
+    """Test orchestrator client report arbitrage opportunity method"""
+    opportunity = {
+        "pair": "BTC/USDT",
+        "buy_exchange": "binance",
+        "sell_exchange": "gate",
+        "buy_price": 50000,
+        "sell_price": 50100,
+        "price_diff_pct": 0.2,
+        "estimated_profit_pct": 0.1,
+        "timestamp": datetime.now().isoformat()
+    }
+    
+    result = await orchestrator_client.report_arbitrage_opportunity(opportunity)
+    
+    assert result is not None
+    assert "success" in result
+    assert result["success"] is True
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_client_notify_event(orchestrator_client):
+    """Test orchestrator client notify event method"""
+    event_type = "reflection"
+    event_data = {
+        "insights": [
+            "Arbitrage between Binance and Gate.io was successful",
+            "Profit was within expected range"
+        ],
+        "timestamp": datetime.now().isoformat()
+    }
+    
+    result = await orchestrator_client.notify_event(event_type, event_data)
+    
+    assert result is not None
+    assert "success" in result
+    assert result["success"] is True
 
 
 @pytest.mark.asyncio

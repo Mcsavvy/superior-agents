@@ -5,9 +5,11 @@ from typing import Dict, List, Any, Optional
 import logging
 import asyncio
 import time
+import os
 from datetime import datetime
 
 from poolmind_agent.utils.config import AgentConfig
+from poolmind_agent.services.exchange_adapter import ExchangeAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -24,18 +26,16 @@ class ExchangeClient:
             config: Agent configuration
         """
         self.config = config
-        self.use_mock = True  # Always use mock implementations for testing
+        self.use_mock = os.getenv("USE_MOCK_EXCHANGES", "false").lower() == "true"
         self._initialize_clients()
         
-        logger.info("Exchange Client initialized")
+        logger.info(f"Exchange Client initialized (use_mock={self.use_mock})")
     
     def _initialize_clients(self) -> None:
         """
         Initialize exchange API clients
         """
         try:
-            # In a real implementation, we would initialize actual exchange clients here
-            # For now, we'll just log that we're using mock clients
             self.exchange_clients = {}
             
             # Always ensure binance is supported for tests
@@ -43,12 +43,23 @@ class ExchangeClient:
             exchanges_to_initialize.add("binance")
             
             for exchange in exchanges_to_initialize:
-                # Mock client initialization
-                self.exchange_clients[exchange] = {
-                    "name": exchange,
-                    "initialized": True,
-                    "last_request": 0
-                }
+                if self.use_mock:
+                    # Mock client initialization
+                    self.exchange_clients[exchange] = {
+                        "name": exchange,
+                        "initialized": True,
+                        "last_request": 0,
+                        "adapter": None
+                    }
+                else:
+                    # Real client initialization
+                    adapter = ExchangeAdapter(exchange)
+                    self.exchange_clients[exchange] = {
+                        "name": exchange,
+                        "initialized": True,
+                        "last_request": 0,
+                        "adapter": adapter
+                    }
             
             logger.info(f"Initialized {len(self.exchange_clients)} exchange clients")
             
@@ -73,11 +84,21 @@ class ExchangeClient:
                 logger.warning(f"Exchange {exchange} not supported")
                 return {}
             
+            if not self.use_mock:
+                # Use real exchange adapter
+                adapter = self.exchange_clients[exchange]["adapter"]
+                ticker = await adapter.get_ticker(pair)
+                
+                if ticker:
+                    logger.debug(f"Got ticker for {pair} on {exchange}: {ticker.get('price')}")
+                    return ticker
+                return {}
+            
+            # Mock implementation below
             # Rate limiting
             await self._apply_rate_limiting(exchange)
             
-            # In a real implementation, we would call the exchange API here
-            # For now, return mock data
+            # Return mock data
             ticker = {
                 "exchange": exchange,
                 "pair": pair,
@@ -113,6 +134,17 @@ class ExchangeClient:
                 logger.warning(f"Exchange {exchange} not supported")
                 return {}
             
+            if not self.use_mock:
+                # Use real exchange adapter
+                adapter = self.exchange_clients[exchange]["adapter"]
+                if hasattr(adapter, "get_order_book"):
+                    order_book = await adapter.get_order_book(pair, depth)
+                    if order_book:
+                        logger.debug(f"Got order book for {pair} on {exchange}")
+                        return order_book
+                return {}
+            
+            # Mock implementation below
             # Rate limiting
             await self._apply_rate_limiting(exchange)
             
@@ -210,11 +242,20 @@ class ExchangeClient:
                 logger.warning(f"Exchange {exchange} not supported")
                 return {}
             
+            if not self.use_mock:
+                # Use real exchange adapter
+                adapter = self.exchange_clients[exchange]["adapter"]
+                tickers = await adapter.get_all_tickers()
+                if tickers:
+                    logger.debug(f"Got {len(tickers)} tickers for {exchange}")
+                    return tickers
+                return {}
+            
+            # Mock implementation below
             # Rate limiting
             await self._apply_rate_limiting(exchange)
             
-            # In a real implementation, we would call the exchange API here
-            # For now, return mock data for common pairs
+            # Return mock data for common pairs
             pairs = self.config.trading_pairs
             
             # Create a dictionary of tickers instead of a list
@@ -237,7 +278,7 @@ class ExchangeClient:
             
         except Exception as e:
             logger.error(f"Error getting all tickers for {exchange}: {str(e)}")
-            return []
+            return {}
     
     async def execute_order(self, 
                           exchange: str, 
@@ -283,6 +324,18 @@ class ExchangeClient:
                 logger.warning(f"Invalid order side: {side}")
                 return {"success": False, "error": f"Invalid order side: {side}"}
             
+            if not self.use_mock:
+                # Use real exchange adapter
+                adapter = self.exchange_clients[exchange]["adapter"]
+                result = await adapter.execute_order(
+                    trading_pair, side, amount, price, order_type
+                )
+                if result:
+                    logger.info(f"Order executed on {exchange}: {amount} {trading_pair} at {result.get('executed_price')}")
+                    return result
+                return {"success": False, "error": "Failed to execute order"}
+            
+            # Mock implementation below
             # Rate limiting
             await self._apply_rate_limiting(exchange)
             
@@ -354,11 +407,20 @@ class ExchangeClient:
                 logger.warning(f"Exchange {exchange} not supported")
                 return {}
             
+            if not self.use_mock:
+                # Use real exchange adapter
+                adapter = self.exchange_clients[exchange]["adapter"]
+                balance = await adapter.get_balance()
+                if balance:
+                    logger.debug(f"Got balance for {exchange}")
+                    return balance
+                return {}
+            
+            # Mock implementation below
             # Rate limiting
             await self._apply_rate_limiting(exchange)
             
-            # In a real implementation, we would call the exchange API here
-            # For now, return mock data
+            # Return mock data
             balance = {
                 "BTC": 0.1,
                 "ETH": 1.5,
@@ -419,38 +481,31 @@ class ExchangeClient:
         """
         # Base prices for common pairs
         base_prices = {
-            "BTC/USDT": 60000.0,
-            "ETH/USDT": 3000.0,
-            "BNB/USDT": 500.0,
-            "SOL/USDT": 100.0,
+            "BTC/USDT": 40000.0,
+            "ETH/USDT": 2800.0,
+            "BNB/USDT": 350.0,
+            "SOL/USDT": 120.0,
             "XRP/USDT": 0.5,
             "ADA/USDT": 0.4,
-            "DOGE/USDT": 0.1,
-            "SHIB/USDT": 0.00001,
+            "DOGE/USDT": 0.08,
+            "DOT/USDT": 6.0,
             "AVAX/USDT": 30.0,
-            "DOT/USDT": 7.0,
-            "MATIC/USDT": 0.8,
-            "LINK/USDT": 15.0,
-            "UNI/USDT": 5.0,
-            "ATOM/USDT": 10.0,
-            "LTC/USDT": 80.0,
-            "BCH/USDT": 250.0,
-            "XLM/USDT": 0.1,
-            "ALGO/USDT": 0.2,
-            "FIL/USDT": 5.0,
-            "ETC/USDT": 20.0
+            "MATIC/USDT": 0.7
         }
         
         # Get base price
         base_price = base_prices.get(pair, 1.0)
         
-        # Add exchange-specific variation (±2%)
-        exchange_factor = 1.0 + (hash(exchange) % 100 - 50) / 2500.0
+        # Add exchange-specific variation (up to 1%)
+        exchange_factor = self._get_hash_based_float(exchange) * 0.01
         
-        # Add random variation (±1%)
-        random_factor = 1.0 + (self._get_random_float() - 0.5) / 50.0
+        # Add time-based variation (up to 0.5%)
+        time_factor = self._get_time_based_float() * 0.005
         
-        return base_price * exchange_factor * random_factor
+        # Calculate price
+        price = base_price * (1 + exchange_factor + time_factor)
+        
+        return price
     
     def _get_mock_volume(self, exchange: str, pair: str) -> float:
         """
@@ -470,39 +525,78 @@ class ExchangeClient:
             "BNB/USDT": 10000.0,
             "SOL/USDT": 50000.0,
             "XRP/USDT": 1000000.0,
-            "ADA/USDT": 2000000.0,
-            "DOGE/USDT": 5000000.0,
-            "SHIB/USDT": 1000000000.0,
-            "AVAX/USDT": 100000.0,
-            "DOT/USDT": 500000.0,
-            "MATIC/USDT": 1000000.0,
-            "LINK/USDT": 200000.0,
-            "UNI/USDT": 300000.0,
-            "ATOM/USDT": 200000.0,
-            "LTC/USDT": 100000.0,
-            "BCH/USDT": 50000.0,
-            "XLM/USDT": 5000000.0,
-            "ALGO/USDT": 2000000.0,
-            "FIL/USDT": 200000.0,
-            "ETC/USDT": 100000.0
+            "ADA/USDT": 500000.0,
+            "DOGE/USDT": 2000000.0,
+            "DOT/USDT": 100000.0,
+            "AVAX/USDT": 50000.0,
+            "MATIC/USDT": 200000.0
         }
         
         # Get base volume
-        base_volume = base_volumes.get(pair, 10000.0)
+        base_volume = base_volumes.get(pair, 1000.0)
         
-        # Add exchange-specific variation (±20%)
-        exchange_factor = 1.0 + (hash(exchange) % 100 - 50) / 250.0
+        # Add exchange-specific variation (up to 20%)
+        exchange_factor = self._get_hash_based_float(exchange) * 0.2
         
-        # Add random variation (±10%)
-        random_factor = 1.0 + (self._get_random_float() - 0.5) / 5.0
+        # Add time-based variation (up to 10%)
+        time_factor = self._get_time_based_float() * 0.1
         
-        return base_volume * exchange_factor * random_factor
+        # Calculate volume
+        volume = base_volume * (1 + exchange_factor + time_factor)
+        
+        return volume
+    
+    def _get_hash_based_float(self, input_string: str) -> float:
+        """
+        Get a deterministic float between -1 and 1 based on input string
+        
+        Args:
+            input_string: Input string
+            
+        Returns:
+            Float between -1 and 1
+        """
+        # Simple hash function
+        hash_value = 0
+        for char in input_string:
+            hash_value = (hash_value * 31 + ord(char)) % 1000000
+        
+        # Convert to float between -1 and 1
+        return (hash_value / 500000.0) - 1.0
+    
+    def _get_time_based_float(self) -> float:
+        """
+        Get a deterministic float between -1 and 1 based on current time
+        
+        Returns:
+            Float between -1 and 1
+        """
+        # Get current time
+        current_time = time.time()
+        
+        # Get hour of day (0-23)
+        hour = int(current_time / 3600) % 24
+        
+        # Get minute of hour (0-59)
+        minute = int(current_time / 60) % 60
+        
+        # Calculate value based on time
+        value = (hour / 12.0) - 1.0 + ((minute / 60.0) - 0.5) * 0.2
+        
+        return value
     
     def _get_random_float(self) -> float:
         """
-        Get a random float between 0 and 1
+        Get a pseudo-random float between 0 and 1
         
         Returns:
-            Random float
+            Float between 0 and 1
         """
-        return (time.time() * 1000) % 1.0
+        # Use time-based seed
+        seed = int(time.time() * 1000) % 1000000
+        
+        # Simple LCG random number generator
+        seed = (seed * 1103515245 + 12345) % 2147483648
+        
+        # Convert to float between 0 and 1
+        return seed / 2147483648.0

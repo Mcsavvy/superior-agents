@@ -12,6 +12,7 @@ from typing import Dict, Any, List, Optional
 from poolmind_agent.utils.config import AgentConfig
 from poolmind_agent.core.agent import PoolMindAgent
 from poolmind_agent.services.exchange_client import ExchangeClient
+from poolmind_agent.services.exchange_adapter import ExchangeAdapter
 from poolmind_agent.services.blockchain_client import BlockchainClient
 from poolmind_agent.services.orchestrator_client import OrchestratorClient
 from poolmind_agent.services.llm_service import LLMService
@@ -20,7 +21,22 @@ from poolmind_agent.services.rag_service import RAGService
 # Import mock services
 from tests.mocks import MockLLMService, MockRAGService
 
-# No mock classes needed - we'll use real implementations
+
+@pytest.fixture(autouse=True)
+def setup_test_environment():
+    """Set up test environment variables for all tests"""
+    # Force mock mode for testing
+    os.environ["USE_MOCK_EXCHANGES"] = "true"
+    os.environ["USE_MOCK_API"] = "true"
+    os.environ["API_URL"] = "https://poolmind.futurdevs.com/api"
+    
+    yield
+    
+    # Clean up environment variables after tests
+    if "USE_MOCK_EXCHANGES" in os.environ:
+        del os.environ["USE_MOCK_EXCHANGES"]
+    if "USE_MOCK_API" in os.environ:
+        del os.environ["USE_MOCK_API"]
 
 
 @pytest.fixture
@@ -33,6 +49,12 @@ def test_config() -> AgentConfig:
     config.use_mock_exchange = True
     config.use_mock_blockchain = True
     config.use_mock_orchestrator = True
+    
+    # Set supported exchanges
+    config.supported_exchanges = ["binance", "gate", "bybit", "hotcoin", "coinw", "orangex"]
+    
+    # Set trading pairs
+    config.trading_pairs = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT"]
     
     # Enable debug for testing
     config.debug = True
@@ -112,7 +134,7 @@ def sample_market_data() -> Dict[str, Any]:
                     "timestamp": "2025-07-03T14:30:00"
                 }
             },
-            "coinbase": {
+            "gate": {
                 "BTC/USDT": {
                     "price": 50200.0,
                     "volume": 80.0,
@@ -140,7 +162,7 @@ def sample_opportunity() -> Dict[str, Any]:
         "pair": "BTC/USDT",
         "buy_exchange": "binance",
         "buy_price": 50000.0,
-        "sell_exchange": "coinbase",
+        "sell_exchange": "gate",
         "sell_price": 50200.0,
         "price_diff_pct": 0.4,
         "estimated_profit_pct": 0.2,
@@ -156,7 +178,7 @@ def sample_strategy() -> Dict[str, Any]:
             "pair": "BTC/USDT",
             "buy_exchange": "binance",
             "buy_price": 50000.0,
-            "sell_exchange": "coinbase",
+            "sell_exchange": "gate",
             "sell_price": 50200.0,
             "price_diff_pct": 0.4,
             "estimated_profit_pct": 0.2,
@@ -179,6 +201,7 @@ def sample_strategy() -> Dict[str, Any]:
 def sample_pool_state() -> Dict[str, Any]:
     """Fixture for sample pool state"""
     return {
+        "pool_id": "test-pool",
         "nav": 1.05,
         "total_value": 10000000.0,
         "participant_count": 50,
@@ -192,5 +215,28 @@ def sample_pool_state() -> Dict[str, Any]:
             "withdrawal_frequency": 0.05,
             "new_participants_rate": 0.02
         },
+        "status": "active",
         "updated_at": "2025-07-03T14:30:00"
+    }
+
+
+@pytest.fixture
+def sample_execution_result() -> Dict[str, Any]:
+    """Fixture for sample execution result"""
+    return {
+        "strategy_id": "test-strategy-1",
+        "buy_exchange": "binance",
+        "sell_exchange": "gate",
+        "symbol": "BTC/USDT",
+        "amount": 0.1,
+        "buy_price": 50000,
+        "sell_price": 50100,
+        "profit": 10,
+        "profit_pct": 0.2,
+        "success": True,
+        "buy_order_id": "buy-order-123",
+        "sell_order_id": "sell-order-456",
+        "execution_time": 2.5,
+        "slippage": 0.05,
+        "timestamp": "2025-07-03T14:30:00"
     }

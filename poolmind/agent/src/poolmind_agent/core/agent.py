@@ -163,8 +163,11 @@ class PoolMindAgent:
         logger.debug("Observing market and pool state")
         
         try:
-            pool_state = await self.pool_context.get_current_state()
-            market_data = await self.pool_context.get_market_data()
+            # Get pool state from external API
+            pool_state = await self.orchestrator_client.get_pool_status()
+            
+            # Get market data from exchanges
+            market_data = await self._fetch_market_data()
             
             return {
                 **state,
@@ -179,6 +182,34 @@ class PoolMindAgent:
                 "errors": state.get("errors", []) + [{"step": "observe", "error": str(e)}]
             }
     
+    async def _fetch_market_data(self) -> Dict[str, Any]:
+        """
+        Fetch market data from all supported exchanges
+        
+        Returns:
+            Dict containing market data from all exchanges
+        """
+        market_data = {}
+        
+        try:
+            # Get data from each exchange
+            for exchange in self.config.supported_exchanges:
+                # Get all tickers for this exchange
+                exchange_tickers = await self.exchange_client.get_all_tickers(exchange)
+                
+                # Store in market data
+                market_data[exchange] = {
+                    "tickers": exchange_tickers,
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+                logger.debug(f"Fetched {len(exchange_tickers)} tickers from {exchange}")
+            
+            return market_data
+        except Exception as e:
+            logger.error(f"Error fetching market data: {str(e)}")
+            return {}
+    
     async def _detect_opportunities_node(self, state: AgentState) -> AgentState:
         """Detect arbitrage opportunities from market data"""
         logger.debug("Detecting arbitrage opportunities")
@@ -188,6 +219,11 @@ class PoolMindAgent:
                 state["pool_state"], 
                 state["market_data"]
             )
+            
+            # Report opportunities to external API
+            if opportunities:
+                for opportunity in opportunities:
+                    await self.orchestrator_client.report_arbitrage_opportunity(opportunity)
             
             return {
                 **state,
@@ -315,9 +351,77 @@ class PoolMindAgent:
                     "execution_results": []
                 }
             
-            execution_results = await self.execution_optimizer.execute(
-                state["execution_plan"]
-            )
+            # Execute trades using real exchange API
+            execution_results = []
+            
+            for plan in state["execution_plan"]:
+                # Extract trade details
+                buy_exchange = plan.get("buy_exchange")
+                sell_exchange = plan.get("sell_exchange")
+                symbol = plan.get("symbol")
+                amount = plan.get("amount")
+                
+                # Execute buy order
+                buy_result = await self.exchange_client.execute_order(
+                    exchange=buy_exchange,
+                    symbol=symbol,
+                    side="buy",
+                    amount=amount
+                )
+                
+                # If buy successful, execute sell order
+                if buy_result.get("success"):
+                    sell_result = await self.exchange_client.execute_order(
+                        exchange=sell_exchange,
+                        symbol=symbol,
+                        side="sell",
+                        amount=amount
+                    )
+                    
+                    # Calculate profit
+                    buy_price = buy_result.get("executed_price", 0)
+                    sell_price = sell_result.get("executed_price", 0)
+                    profit = (sell_price - buy_price) * amount
+                    profit_pct = ((sell_price - buy_price) / buy_price) * 100 if buy_price > 0 else 0
+                    
+                    # Create result
+                    result = {
+                        "strategy_id": plan.get("strategy_id"),
+                        "buy_exchange": buy_exchange,
+                        "sell_exchange": sell_exchange,
+                        "symbol": symbol,
+                        "amount": amount,
+                        "buy_price": buy_price,
+                        "sell_price": sell_price,
+                        "profit": profit,
+                        "profit_pct": profit_pct,
+                        "buy_order_id": buy_result.get("order_id"),
+                        "sell_order_id": sell_result.get("order_id"),
+                        "timestamp": datetime.now().isoformat(),
+                        "success": sell_result.get("success", False)
+                    }
+                    
+                    execution_results.append(result)
+                    
+                    # Notify external API about trade execution
+                    await self.orchestrator_client.notify_trade_execution(result)
+                else:
+                    # Buy order failed
+                    result = {
+                        "strategy_id": plan.get("strategy_id"),
+                        "buy_exchange": buy_exchange,
+                        "sell_exchange": sell_exchange,
+                        "symbol": symbol,
+                        "amount": amount,
+                        "error": buy_result.get("error", "Unknown error"),
+                        "timestamp": datetime.now().isoformat(),
+                        "success": False
+                    }
+                    
+                    execution_results.append(result)
+                    
+                    # Notify external API about failed trade
+                    await self.orchestrator_client.notify_trade_execution(result)
             
             return {
                 **state,
@@ -325,6 +429,15 @@ class PoolMindAgent:
             }
         except Exception as e:
             logger.error("Error in execute node: %s", str(e))
+            error_result = {
+                "error": str(e),
+                "timestamp": datetime.now().isoformat(),
+                "success": False
+            }
+            
+            # Notify external API about error
+            await self.orchestrator_client.notify_event("execution_error", error_result)
+            
             return {
                 **state,
                 "errors": state.get("errors", []) + [{"step": "execute", "error": str(e)}],
@@ -341,6 +454,13 @@ class PoolMindAgent:
                 state["decisions"],
                 state.get("execution_results", [])
             )
+            
+            # Report reflection to external API
+            if reflection:
+                await self.orchestrator_client.notify_event("reflection", {
+                    "reflection": reflection,
+                    "timestamp": datetime.now().isoformat()
+                })
             
             return {
                 **state,
@@ -399,342 +519,42 @@ class PoolMindAgent:
             
             # Mark as not initialized
             self.is_initialized = False
-            
-            logger.info("PoolMind Agent stopped successfully")
         except Exception as e:
-            logger.error(f"Error stopping PoolMind Agent: {str(e)}")
+            logger.error(f"Error stopping agent: {str(e)}")
     
-    async def reset(self) -> None:
-        """Reset agent state"""
-        logger.info("Resetting PoolMind Agent state")
+    async def run_continuous(self, interval_seconds: int = 60) -> None:
+        """
+        Run the agent continuously with a specified interval
         
-        try:
-            # Stop the agent
-            await self.stop()
-            
-            # Re-initialize
+        Args:
+            interval_seconds: Interval between runs in seconds
+        """
+        logger.info(f"Starting continuous agent execution with {interval_seconds}s interval")
+        
+        if not self.is_initialized:
             await self.initialize()
-            
-            logger.info("PoolMind Agent reset successfully")
-        except Exception as e:
-            logger.error(f"Error resetting PoolMind Agent: {str(e)}")
-            raise
-    
-    def get_uptime(self) -> float:
-        """Get agent uptime in seconds"""
-        return time.time() - self.start_time
-    
-    async def observe(self, market_conditions: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """
-        Observe market conditions
-        
-        Args:
-            market_conditions: List of market conditions
-            
-        Returns:
-            Observation result
-        """
-        self.last_activity_time = time.time()
         
         try:
-            # Update pool context with market conditions
-            await self.pool_context.update_market_data(market_conditions)
-            
-            # Detect opportunities
-            opportunities = await self.strategy_generator.detect_opportunities(
-                await self.pool_context.get_current_state(),
-                await self.pool_context.get_market_data()
-            )
-            
-            return {
-                "success": True,
-                "opportunities_detected": len(opportunities),
-                "timestamp": datetime.now().isoformat()
-            }
-        except Exception as e:
-            logger.error(f"Error in observe: {str(e)}")
-            return {"success": False, "error": str(e)}
-    
-    async def get_detected_opportunities(self, limit: int = 10) -> List[Dict[str, Any]]:
-        """
-        Get detected arbitrage opportunities
-        
-        Args:
-            limit: Maximum number of opportunities to return
-            
-        Returns:
-            List of opportunities
-        """
-        try:
-            opportunities = await self.strategy_generator.get_recent_opportunities(limit)
-            return opportunities
-        except Exception as e:
-            logger.error(f"Error getting opportunities: {str(e)}")
-            return []
-    
-    async def generate_strategy(self, opportunity: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Generate a trading strategy for an opportunity
-        
-        Args:
-            opportunity: Arbitrage opportunity
-            
-        Returns:
-            Trading strategy
-        """
-        self.last_activity_time = time.time()
-        
-        try:
-            # Get current state
-            pool_state = await self.pool_context.get_current_state()
-            market_data = await self.pool_context.get_market_data()
-            
-            # Generate strategy
-            strategies = await self.strategy_generator.generate_strategy(
-                pool_state,
-                market_data,
-                [opportunity]
-            )
-            
-            if not strategies:
-                return {}
-            
-            # Return first strategy
-            return strategies[0]
-        except Exception as e:
-            logger.error(f"Error generating strategy: {str(e)}")
-            return {}
-    
-    async def assess_risk(self, strategy: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Assess risk for a trading strategy
-        
-        Args:
-            strategy: Trading strategy
-            
-        Returns:
-            Risk assessment
-        """
-        self.last_activity_time = time.time()
-        
-        try:
-            # Get current state
-            pool_state = await self.pool_context.get_current_state()
-            
-            # Assess risk
-            risk_assessments = await self.risk_assessor.assess_strategies(
-                pool_state,
-                [strategy]
-            )
-            
-            if not risk_assessments:
-                return {}
-            
-            # Return first risk assessment
-            return risk_assessments[0]
-        except Exception as e:
-            logger.error(f"Error assessing risk: {str(e)}")
-            return {}
-    
-    async def optimize_execution(self, strategy: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Optimize execution for a trading strategy
-        
-        Args:
-            strategy: Trading strategy
-            
-        Returns:
-            Optimized execution plan
-        """
-        self.last_activity_time = time.time()
-        
-        try:
-            # Get current state
-            pool_state = await self.pool_context.get_current_state()
-            
-            # Optimize execution
-            execution_plan = await self.execution_optimizer.optimize(
-                pool_state,
-                [strategy]
-            )
-            
-            if not execution_plan:
-                return {}
-            
-            # Return first execution plan
-            return execution_plan[0]
-        except Exception as e:
-            logger.error(f"Error optimizing execution: {str(e)}")
-            return {}
-    
-    async def execute(self, strategy: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Execute a trading strategy
-        
-        Args:
-            strategy: Trading strategy
-            
-        Returns:
-            Execution result
-        """
-        self.last_activity_time = time.time()
-        
-        try:
-            # Execute strategy
-            execution_results = await self.execution_optimizer.execute([strategy])
-            
-            if not execution_results:
-                return {}
-            
-            # Return first execution result
-            return execution_results[0]
-        except Exception as e:
-            logger.error(f"Error executing strategy: {str(e)}")
-            return {"success": False, "error": str(e)}
-    
-    async def get_execution_result(self, strategy_id: str) -> Dict[str, Any]:
-        """
-        Get execution result for a strategy
-        
-        Args:
-            strategy_id: Strategy ID
-            
-        Returns:
-            Execution result
-        """
-        try:
-            # Get execution result from orchestrator
-            result = await self.orchestrator_client.get_execution_result(strategy_id)
-            return result
-        except Exception as e:
-            logger.error(f"Error getting execution result: {str(e)}")
-            return {}
-    
-    async def reflect(self, execution_result: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Reflect on execution result
-        
-        Args:
-            execution_result: Execution result
-            
-        Returns:
-            Reflection insight
-        """
-        self.last_activity_time = time.time()
-        
-        try:
-            # Get current state
-            pool_state = await self.pool_context.get_current_state()
-            
-            # Reflect on execution
-            reflection = await self.reflection_engine.reflect(
-                pool_state,
-                [execution_result.get("strategy", {})],
-                [execution_result]
-            )
-            
-            return reflection
-        except Exception as e:
-            logger.error(f"Error reflecting on execution: {str(e)}")
-            return {}
-    
-    async def run_full_cycle(self, market_conditions: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """
-        Run full agent cycle
-        
-        Args:
-            market_conditions: List of market conditions
-            
-        Returns:
-            Cycle result
-        """
-        self.last_activity_time = time.time()
-        
-        try:
-            # Observe
-            observe_result = await self.observe(market_conditions)
-            
-            if not observe_result.get("success", False):
-                return {"success": False, "error": observe_result.get("error", "Observation failed")}
-            
-            # Get opportunities
-            opportunities = await self.get_detected_opportunities(limit=1)
-            
-            if not opportunities:
-                return {"success": True, "message": "No opportunities detected"}
-            
-            # Generate strategy
-            strategy = await self.generate_strategy(opportunities[0])
-            
-            if not strategy:
-                return {"success": True, "message": "No viable strategy generated"}
-            
-            # Assess risk
-            risk_assessment = await self.assess_risk(strategy)
-            
-            if not risk_assessment.get("proceed", False):
-                return {"success": True, "message": "Strategy rejected by risk assessment"}
-            
-            # Optimize execution
-            optimized_strategy = await self.optimize_execution(strategy)
-            
-            if not optimized_strategy:
-                return {"success": True, "message": "Failed to optimize execution"}
-            
-            # Execute
-            execution_result = await self.execute(optimized_strategy)
-            
-            if not execution_result.get("success", False):
-                return {"success": True, "message": "Execution failed", "error": execution_result.get("error")}
-            
-            # Reflect
-            reflection = await self.reflect(execution_result)
-            
-            return {
-                "success": True,
-                "strategy": strategy,
-                "risk_assessment": risk_assessment,
-                "execution_result": execution_result,
-                "reflection": reflection
-            }
-        except Exception as e:
-            logger.error(f"Error running full cycle: {str(e)}")
-            return {"success": False, "error": str(e)}
-    
-    async def update_config(self, config_updates: Dict[str, Any]) -> bool:
-        """
-        Update agent configuration
-        
-        Args:
-            config_updates: Configuration updates
-            
-        Returns:
-            True if successful, False otherwise
-        """
-        try:
-            # Update config
-            success = self.config.update(config_updates)
-            
-            if success:
-                # Propagate config updates to components
-                if self.pool_context:
-                    await self.pool_context.update_config(self.config)
-                if self.strategy_generator:
-                    await self.strategy_generator.update_config(self.config)
-                if self.risk_assessor:
-                    await self.risk_assessor.update_config(self.config)
-                if self.execution_optimizer:
-                    await self.execution_optimizer.update_config(self.config)
-                if self.reflection_engine:
-                    await self.reflection_engine.update_config(self.config)
-                if self.llm_service:
-                    await self.llm_service.update_config(self.config)
-                if self.rag_service:
-                    await self.rag_service.update_config(self.config)
+            while True:
+                start_time = time.time()
                 
-                logger.info("Agent configuration successfully updated")
-            
-            return success
+                try:
+                    # Run one iteration of the workflow
+                    await self.start()
+                except Exception as e:
+                    logger.error(f"Error in agent workflow iteration: {str(e)}")
+                
+                # Calculate time to sleep
+                elapsed = time.time() - start_time
+                sleep_time = max(0, interval_seconds - elapsed)
+                
+                if sleep_time > 0:
+                    logger.info(f"Sleeping for {sleep_time:.2f}s until next iteration")
+                    await asyncio.sleep(sleep_time)
+        except KeyboardInterrupt:
+            logger.info("Received keyboard interrupt, stopping agent")
+            await self.stop()
         except Exception as e:
-            logger.error(f"Error updating config: {str(e)}")
-            return False
+            logger.error(f"Error in continuous execution: {str(e)}")
+            await self.stop()
+            raise

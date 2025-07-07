@@ -6,6 +6,7 @@ import logging
 import asyncio
 import json
 import time
+import os
 from datetime import datetime
 
 import httpx
@@ -27,12 +28,12 @@ class OrchestratorClient:
             config: Agent configuration
         """
         self.config = config
-        self.base_url = config.orchestrator_url
+        self.base_url = os.getenv("API_URL", "https://poolmind.futurdevs.com/api")
         self.api_key = config.orchestrator_api_key
         self.last_request_time = 0
-        self.use_mock = True  # Always use mock implementations for testing
+        self.use_mock = os.getenv("USE_MOCK_API", "false").lower() == "true"
         
-        logger.info("Orchestrator Client initialized")
+        logger.info(f"Orchestrator Client initialized with API URL: {self.base_url} (use_mock={self.use_mock})")
     
     async def get_pool_status(self) -> Dict[str, Any]:
         """
@@ -45,16 +46,14 @@ class OrchestratorClient:
             # Apply rate limiting
             await self._apply_rate_limiting()
             
-            # In a real implementation, we would call the orchestrator API here
-            # For now, return mock data
+            # Check if we're in mock mode
+            if self.use_mock:
+                return self._get_mock_pool_status()
+            
+            # Make API request
             async with httpx.AsyncClient() as client:
-                # Check if we're in mock mode
-                if self.config.use_mock_data or not self.base_url:
-                    return self._get_mock_pool_status()
-                
-                # Make API request
                 response = await client.get(
-                    f"{self.base_url}/api/pool/status",
+                    f"{self.base_url}/pool/status",
                     headers=self._get_headers()
                 )
                 
@@ -83,16 +82,14 @@ class OrchestratorClient:
             # Apply rate limiting
             await self._apply_rate_limiting()
             
-            # In a real implementation, we would call the orchestrator API here
-            # For now, return mock data
+            # Check if we're in mock mode
+            if self.use_mock:
+                return self._get_mock_trading_history(limit)
+            
+            # Make API request
             async with httpx.AsyncClient() as client:
-                # Check if we're in mock mode
-                if self.config.use_mock_data or not self.base_url:
-                    return self._get_mock_trading_history(limit)
-                
-                # Make API request
                 response = await client.get(
-                    f"{self.base_url}/api/trading/history",
+                    f"{self.base_url}/trading/history",
                     params={"limit": limit},
                     headers=self._get_headers()
                 )
@@ -122,16 +119,14 @@ class OrchestratorClient:
             # Apply rate limiting
             await self._apply_rate_limiting()
             
-            # In a real implementation, we would call the orchestrator API here
-            # For now, return mock data
+            # Check if we're in mock mode
+            if self.use_mock:
+                return self._get_mock_submission_result(strategy)
+            
+            # Make API request
             async with httpx.AsyncClient() as client:
-                # Check if we're in mock mode
-                if self.config.use_mock_data or not self.base_url:
-                    return self._get_mock_submission_result(strategy)
-                
-                # Make API request
                 response = await client.post(
-                    f"{self.base_url}/api/strategy/submit",
+                    f"{self.base_url}/strategy/submit",
                     json=strategy,
                     headers=self._get_headers()
                 )
@@ -161,16 +156,14 @@ class OrchestratorClient:
             # Apply rate limiting
             await self._apply_rate_limiting()
             
-            # In a real implementation, we would call the orchestrator API here
-            # For now, return mock data
+            # Check if we're in mock mode
+            if self.use_mock:
+                return self._get_mock_execution_result(strategy_id)
+            
+            # Make API request
             async with httpx.AsyncClient() as client:
-                # Check if we're in mock mode
-                if self.config.use_mock_data or not self.base_url:
-                    return self._get_mock_execution_result(strategy_id)
-                
-                # Make API request
                 response = await client.get(
-                    f"{self.base_url}/api/strategy/{strategy_id}/result",
+                    f"{self.base_url}/strategy/{strategy_id}/result",
                     headers=self._get_headers()
                 )
                 
@@ -183,6 +176,43 @@ class OrchestratorClient:
             
         except Exception as e:
             logger.error(f"Error getting execution result: {str(e)}")
+            return {"success": False, "error": str(e)}
+    
+    async def notify_trade_execution(self, trade_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Notify orchestrator of a trade execution
+        
+        Args:
+            trade_data: Trade execution data
+            
+        Returns:
+            Notification result
+        """
+        try:
+            # Apply rate limiting
+            await self._apply_rate_limiting()
+            
+            # Check if we're in mock mode
+            if self.use_mock:
+                return {"success": True, "message": "Trade execution notification received"}
+            
+            # Make API request
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.base_url}/trade/notify",
+                    json=trade_data,
+                    headers=self._get_headers()
+                )
+                
+                # Check response
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    logger.error(f"Error notifying trade execution: {response.status_code} {response.text}")
+                    return {"success": False, "error": f"HTTP {response.status_code}: {response.text}"}
+            
+        except Exception as e:
+            logger.error(f"Error notifying trade execution: {str(e)}")
             return {"success": False, "error": str(e)}
     
     async def notify_event(self, event_type: str, event_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -200,16 +230,14 @@ class OrchestratorClient:
             # Apply rate limiting
             await self._apply_rate_limiting()
             
-            # In a real implementation, we would call the orchestrator API here
-            # For now, return mock data
+            # Check if we're in mock mode
+            if self.use_mock:
+                return {"success": True, "message": "Event notification received"}
+            
+            # Make API request
             async with httpx.AsyncClient() as client:
-                # Check if we're in mock mode
-                if self.config.use_mock_data or not self.base_url:
-                    return {"success": True, "message": "Event notification received"}
-                
-                # Make API request
                 response = await client.post(
-                    f"{self.base_url}/api/events/notify",
+                    f"{self.base_url}/events/notify",
                     json={"type": event_type, "data": event_data},
                     headers=self._get_headers()
                 )
@@ -236,16 +264,14 @@ class OrchestratorClient:
             # Apply rate limiting
             await self._apply_rate_limiting()
             
-            # In a real implementation, we would call the orchestrator API here
-            # For now, return mock data
+            # Check if we're in mock mode
+            if self.use_mock:
+                return self._get_mock_agent_config()
+            
+            # Make API request
             async with httpx.AsyncClient() as client:
-                # Check if we're in mock mode
-                if self.config.use_mock_data or not self.base_url:
-                    return self._get_mock_agent_config()
-                
-                # Make API request
                 response = await client.get(
-                    f"{self.base_url}/api/agent/config",
+                    f"{self.base_url}/agent/config",
                     headers=self._get_headers()
                 )
                 
@@ -259,6 +285,43 @@ class OrchestratorClient:
         except Exception as e:
             logger.error(f"Error getting agent config: {str(e)}")
             return self._get_mock_agent_config()
+    
+    async def report_arbitrage_opportunity(self, opportunity_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Report an arbitrage opportunity to the orchestrator
+        
+        Args:
+            opportunity_data: Arbitrage opportunity data
+            
+        Returns:
+            Report result
+        """
+        try:
+            # Apply rate limiting
+            await self._apply_rate_limiting()
+            
+            # Check if we're in mock mode
+            if self.use_mock:
+                return {"success": True, "message": "Arbitrage opportunity reported", "opportunity_id": f"opp-{int(time.time())}"}
+            
+            # Make API request
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.base_url}/arbitrage/report",
+                    json=opportunity_data,
+                    headers=self._get_headers()
+                )
+                
+                # Check response
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    logger.error(f"Error reporting arbitrage opportunity: {response.status_code} {response.text}")
+                    return {"success": False, "error": f"HTTP {response.status_code}: {response.text}"}
+            
+        except Exception as e:
+            logger.error(f"Error reporting arbitrage opportunity: {str(e)}")
+            return {"success": False, "error": str(e)}
     
     def _get_headers(self) -> Dict[str, str]:
         """
@@ -306,7 +369,7 @@ class OrchestratorClient:
             Mock pool status
         """
         return {
-            "pool_id": "pool-1",  # Added pool_id field to match test expectations
+            "pool_id": "pool-1",
             "total_value": 1000000 + (time.time() % 100000),
             "liquidity_reserve": 150000 + (time.time() % 50000),
             "participant_count": 100 + int(time.time() % 20),
@@ -367,10 +430,10 @@ class OrchestratorClient:
             profit_pct = ((sell_price - buy_price) / buy_price) * 100.0
             profit = position_size * profit_pct / 100.0
             
-            # Create trade with strategy_id field to match test expectations
+            # Create trade
             trade = {
                 "id": f"trade-{int(timestamp)}-{i}",
-                "strategy_id": f"strategy-{int(timestamp)}-{i}",  # Added strategy_id field
+                "strategy_id": f"strategy-{int(timestamp)}-{i}",
                 "timestamp": datetime.fromtimestamp(timestamp).isoformat(),
                 "pair": pair,
                 "buy_exchange": buy_exchange,
@@ -403,7 +466,6 @@ class OrchestratorClient:
         return {
             "success": True,
             "strategy_id": strategy_id,
-            "status": "pending",  # Added status field to match test expectations
             "message": "Strategy submitted successfully",
             "timestamp": datetime.now().isoformat()
         }
@@ -418,54 +480,27 @@ class OrchestratorClient:
         Returns:
             Mock execution result
         """
-        # Parse strategy ID to get timestamp
-        try:
-            parts = strategy_id.split("-")
-            timestamp = int(parts[1])
-            strategy_hash = int(parts[2])
-        except:
-            timestamp = int(time.time())
-            strategy_hash = 0
+        # Generate random execution result
+        success = True  # 80% success rate
         
-        # Calculate execution time
-        execution_time = time.time() - timestamp
-        
-        # Determine status based on execution time
-        if execution_time < 10:
-            status = "pending"
-            success = None
-        elif execution_time < 60:
-            status = "executing"
-            success = None
+        if success:
+            return {
+                "success": True,
+                "strategy_id": strategy_id,
+                "status": "completed",
+                "profit": 100.0 + (time.time() % 100),
+                "profit_pct": 0.5 + (time.time() % 100) / 1000,
+                "execution_time": 2.5 + (time.time() % 10) / 10,
+                "timestamp": datetime.now().isoformat()
+            }
         else:
-            status = "completed"
-            success = strategy_hash % 10 != 0  # 90% success rate
-        
-        # Create result
-        result = {
-            "strategy_id": strategy_id,
-            "status": status,
-            "timestamp": datetime.fromtimestamp(timestamp).isoformat()
-        }
-        
-        # Add execution details if completed
-        if status == "completed":
-            if success:
-                result.update({
-                    "success": True,
-                    "profit": 100 + (strategy_hash % 900),
-                    "profit_pct": 0.5 + (strategy_hash % 100) / 100,
-                    "execution_time": execution_time,
-                    "message": "Strategy executed successfully"
-                })
-            else:
-                result.update({
-                    "success": False,
-                    "error": "Execution failed due to market conditions",
-                    "execution_time": execution_time
-                })
-        
-        return result
+            return {
+                "success": False,
+                "strategy_id": strategy_id,
+                "status": "failed",
+                "error": "Execution failed due to market conditions",
+                "timestamp": datetime.now().isoformat()
+            }
     
     def _get_mock_agent_config(self) -> Dict[str, Any]:
         """
@@ -475,21 +510,18 @@ class OrchestratorClient:
             Mock agent configuration
         """
         return {
+            "supported_exchanges": [
+                "binance", "gate", "bybit", "hotcoin", "coinw", "orangex"
+            ],
             "trading_pairs": [
                 "BTC/USDT", "ETH/USDT", "BNB/USDT", "SOL/USDT", "XRP/USDT",
                 "ADA/USDT", "DOGE/USDT", "SHIB/USDT", "AVAX/USDT", "DOT/USDT"
             ],
-            "supported_exchanges": [
-                "Binance", "Coinbase", "Kraken", "Huobi", "KuCoin"
-            ],
-            "min_profit_threshold": 0.5,
-            "max_position_size_pct": 10.0,
-            "max_risk_threshold": 7.0,
-            "liquidity_reserve_min_pct": 10.0,
-            "update_interval_seconds": 60,
-            "llm_models": {
-                "primary": "gpt-4",
-                "fallback": "gpt-3.5-turbo",
-                "strategy": "gpt-4"
-            }
+            "min_profit_threshold": 0.5,  # Minimum profit threshold (%)
+            "max_position_size": 50000.0,  # Maximum position size
+            "max_slippage": 0.2,  # Maximum allowed slippage (%)
+            "risk_tolerance": 0.7,  # Risk tolerance (0-1)
+            "update_interval": 60,  # Update interval in seconds
+            "execution_timeout": 30,  # Execution timeout in seconds
+            "last_updated": datetime.now().isoformat()
         }

@@ -12,7 +12,7 @@ The PoolMind AI Agent is a hybrid multi-agent system that optimizes returns for 
 
 ## Architecture
 
-The system follows a modular architecture with specialized agents for discrete tasks:
+The system follows a modular asynchronous workflow architecture with specialized components:
 
 ```
 Market Sensors → Pool State Agent → Strategy Orchestrator → Risk Assessor → Action Validator → Trade Executor → Reflection Engine
@@ -20,20 +20,21 @@ Market Sensors → Pool State Agent → Strategy Orchestrator → Risk Assessor 
 
 ### Core Components
 
-1. **Pool Context Engine**: Maintains real-time pool state
-2. **Multi-LLM Strategy Generator**: Creates trading strategies based on pool state and market data
-3. **Risk Assessment Module**: Evaluates opportunities against risk dimensions
-4. **Execution Optimizer**: Handles gas-aware routing and slippage prediction
-5. **Reflection & Learning Loop**: Analyzes outcomes and adjusts strategies
+1. **Exchange Adapter**: Direct integration with cryptocurrency exchange APIs
+2. **Orchestrator Client**: Communication with external orchestration service
+3. **Pool Context Engine**: Maintains real-time pool state
+4. **Multi-LLM Strategy Generator**: Creates trading strategies based on pool state and market data
+5. **Risk Assessment Module**: Evaluates opportunities against risk dimensions
+6. **Execution Optimizer**: Handles gas-aware routing and slippage prediction
+7. **Reflection & Learning Loop**: Analyzes outcomes and adjusts strategies
 
 ## Installation
 
 ### Prerequisites
 
 - Python 3.9+
-- Redis
-- PostgreSQL
 - Access to LLM APIs (OpenAI, Anthropic, etc.)
+- Exchange API credentials
 
 ### Setup
 
@@ -54,27 +55,64 @@ cp .env.example .env
 # Edit .env with your API keys and configuration
 ```
 
+## Environment Variables
+
+The agent uses the following environment variables:
+
+```
+# Exchange API Credentials
+BINANCE_API_KEY=your_binance_api_key
+BINANCE_API_SECRET=your_binance_api_secret
+GATE_API_KEY=your_gate_api_key
+GATE_API_SECRET=your_gate_api_secret
+
+# Orchestrator API
+API_URL=https://api.orchestrator.example.com
+
+# LLM Configuration
+OPENAI_API_KEY=your_openai_api_key
+ANTHROPIC_API_KEY=your_anthropic_api_key
+
+# Mode Configuration
+USE_MOCK_EXCHANGES=false  # Set to true for testing without real exchange API calls
+USE_MOCK_API=false        # Set to true for testing without real orchestrator API calls
+```
+
 ## Usage
 
-### Starting the Agent
-
-```python
-from poolmind_agent import PoolMindAgent
-
-agent = PoolMindAgent()
-agent.start()
-```
-
-### API Integration
-
-The agent exposes a FastAPI interface for integration with the existing PoolMind ecosystem:
+### Running the Agent
 
 ```bash
-# Start the API server
-uvicorn poolmind_agent.api.main:app --reload
+# Run the agent directly
+python -m poolmind_agent.main
+
+# Run with specific configuration
+python -m poolmind_agent.main --config config/production.yaml
 ```
 
-API documentation is available at `http://localhost:8000/docs` when the server is running.
+### Running as a Standalone Process
+
+The agent is designed to run as a standalone asynchronous process that communicates directly with exchange APIs and the orchestrator API.
+
+```python
+from poolmind_agent.core.agent import PoolMindAgent
+from poolmind_agent.models.config import AgentConfig
+import asyncio
+
+async def main():
+    # Load configuration
+    config = AgentConfig.from_file("config/default.yaml")
+    
+    # Initialize agent
+    agent = PoolMindAgent(config)
+    await agent.initialize()
+    
+    # Run agent continuously
+    await agent.run_continuous(interval_seconds=60)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
 
 ## Development
 
@@ -84,12 +122,20 @@ API documentation is available at `http://localhost:8000/docs` when the server i
 agent/
 ├── src/
 │   └── poolmind_agent/
-│       ├── api/          # FastAPI endpoints
-│       ├── core/         # Core agent components
+│       ├── core/         # Core agent components and workflow
 │       ├── models/       # Data models and schemas
 │       ├── services/     # External service integrations
+│       │   ├── exchange_adapter.py  # Exchange API integration
+│       │   ├── exchange_client.py   # Exchange client facade
+│       │   ├── orchestrator_client.py  # External API client
+│       │   └── ...
 │       └── utils/        # Helper utilities
 ├── tests/                # Test suite
+│   ├── conftest.py       # Test fixtures
+│   ├── mocks.py          # Mock implementations for testing
+│   ├── test_agent.py     # Agent tests
+│   └── test_services.py  # Service tests
+├── config/               # Configuration files
 ├── pyproject.toml        # Project configuration
 ├── setup.py              # Package setup
 └── README.md             # This file
@@ -98,8 +144,17 @@ agent/
 ### Running Tests
 
 ```bash
+# Run all tests
 pytest
-pytest --cov=poolmind_agent  # With coverage
+
+# Run with coverage
+pytest --cov=poolmind_agent
+
+# Run with mock mode (default)
+USE_MOCK_EXCHANGES=true USE_MOCK_API=true pytest
+
+# Run with real API mode (requires credentials)
+USE_MOCK_EXCHANGES=false USE_MOCK_API=false pytest
 ```
 
 ## Performance Metrics
@@ -114,8 +169,8 @@ pytest --cov=poolmind_agent  # With coverage
 
 The system implements:
 - LLM output validation
-- Encrypted context storage
-- Double-signature execution
+- Encrypted API credentials via environment variables
+- Rate limiting for exchange API calls
 - Trade size ceilings
 - Full decision provenance and audit trails
 

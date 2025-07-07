@@ -50,7 +50,7 @@ class MockLLMService:
                     "size": 0.1
                 },
                 "sell_order": {
-                    "exchange": "coinbase",
+                    "exchange": "gate",
                     "order_type": "limit",
                     "price": 50150.0,
                     "size": 0.1
@@ -134,3 +134,112 @@ class MockRAGService:
     async def retrieve_similar_trade_outcomes(self, outcome: Dict[str, Any], limit: int = 5) -> List[Dict[str, Any]]:
         """Retrieve similar trade outcomes"""
         return self.collections["trade_outcomes"][:min(limit, len(self.collections["trade_outcomes"]))]
+
+
+class MockExchangeAdapter:
+    """Mock Exchange Adapter for testing"""
+    
+    def __init__(self, exchange_id: str, api_key: str, api_secret: str):
+        self.exchange_id = exchange_id
+        self.api_key = api_key
+        self.api_secret = api_secret
+        self.initialized = True
+        
+    async def initialize(self) -> bool:
+        """Initialize the exchange adapter"""
+        self.initialized = True
+        return True
+        
+    async def get_ticker(self, symbol: str) -> Dict[str, Any]:
+        """Get ticker data for a symbol"""
+        return {
+            "price": 50000.0 if symbol == "BTC/USDT" else 3000.0,
+            "volume": 100.0 if symbol == "BTC/USDT" else 500.0,
+            "bid": 49950.0 if symbol == "BTC/USDT" else 2990.0,
+            "ask": 50050.0 if symbol == "BTC/USDT" else 3010.0,
+            "timestamp": datetime.now().timestamp()
+        }
+        
+    async def get_order_book(self, symbol: str, limit: int = 20) -> Dict[str, Any]:
+        """Get order book for a symbol"""
+        base_price = 50000.0 if symbol == "BTC/USDT" else 3000.0
+        
+        bids = []
+        asks = []
+        
+        for i in range(limit):
+            bids.append([base_price - (i * 10), 1.0 / (i + 1)])
+            asks.append([base_price + (i * 10), 1.0 / (i + 1)])
+            
+        return {
+            "bids": bids,
+            "asks": asks,
+            "timestamp": datetime.now().timestamp()
+        }
+        
+    async def get_balance(self, currency: str) -> Dict[str, Any]:
+        """Get balance for a currency"""
+        return {
+            "free": 10.0 if currency == "BTC" else 50000.0,
+            "used": 1.0 if currency == "BTC" else 10000.0,
+            "total": 11.0 if currency == "BTC" else 60000.0
+        }
+        
+    async def execute_order(self, symbol: str, order_type: str, side: str, amount: float, price: Optional[float] = None) -> Dict[str, Any]:
+        """Execute an order"""
+        return {
+            "order_id": f"mock-{self.exchange_id}-{side}-{datetime.now().timestamp()}",
+            "symbol": symbol,
+            "type": order_type,
+            "side": side,
+            "amount": amount,
+            "executed_price": price if price else 50000.0 if symbol == "BTC/USDT" else 3000.0,
+            "status": "closed",
+            "timestamp": datetime.now().timestamp(),
+            "success": True
+        }
+        
+    async def get_markets(self) -> Dict[str, Any]:
+        """Get available markets"""
+        return {
+            "BTC/USDT": {
+                "symbol": "BTC/USDT",
+                "base": "BTC",
+                "quote": "USDT",
+                "active": True,
+                "precision": {
+                    "price": 2,
+                    "amount": 6
+                },
+                "limits": {
+                    "amount": {
+                        "min": 0.000001,
+                        "max": 1000.0
+                    },
+                    "price": {
+                        "min": 0.01,
+                        "max": 1000000.0
+                    }
+                }
+            },
+            "ETH/USDT": {
+                "symbol": "ETH/USDT",
+                "base": "ETH",
+                "quote": "USDT",
+                "active": True,
+                "precision": {
+                    "price": 2,
+                    "amount": 5
+                },
+                "limits": {
+                    "amount": {
+                        "min": 0.00001,
+                        "max": 10000.0
+                    },
+                    "price": {
+                        "min": 0.01,
+                        "max": 100000.0
+                    }
+                }
+            }
+        }
