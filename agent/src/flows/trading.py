@@ -442,10 +442,11 @@ def assisted_flow(
 		assets=json.dumps(end_metric_state),
 	)
 
+	newline = "\n"
 	summarized_state_change = dedent(f"""
-        Holdings Before: {str(start_metric_state).replace("\n", "")}
+        Holdings Before: {str(start_metric_state).replace(newline, "")}
         USD Value Before: {start_metric_state["total_value_usd"]}
-        Holdings After: {str(end_metric_state).replace("\n", "")}
+        Holdings After: {str(end_metric_state).replace(newline, "")}
         USD Value After: {end_metric_state["total_value_usd"]}
     """)
 

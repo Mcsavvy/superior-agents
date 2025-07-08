@@ -31,6 +31,26 @@ FE_DATA_TRADING_DEFAULTS = {
 	"trading_instruments": ["spot"],
 }
 
+FE_DATA_POOLMIND_ARBITRAGE_DEFAULTS = {
+	"model": "deepseek_v3_or",
+	"role": "professional, analytical, risk-aware, profit-focused",
+	"network": "stacks",
+	"time": "continuous",
+	"metric_name": "pool_state",
+	"research_tools": [
+		"ExchangeAPIs",
+		"PoolMindAPI",
+		"MarketData",
+	],
+	"prompts": {},
+	"notifications": ["poolmind", "telegram"],
+	"trading_instruments": ["arbitrage"],
+	"supported_exchanges": ["binance", "okx", "gate", "hotcoin", "bybit", "coinw", "orangex"],
+	"min_profit_threshold": 0.5,
+	"max_trade_size_percent": 10.0,
+	"stop_loss_threshold": 5.0,
+}
+
 
 SERVICE_TO_PROMPT = {
 	"Twitter": "Twitter (env vars TWITTER_API_KEY, TWITTER_API_KEY_SECRET, TWITTER_BEARER_TOKEN, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET)",

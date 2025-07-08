@@ -2,7 +2,7 @@ from pprint import pformat
 from loguru import logger
 from src.agent.marketing import MarketingPromptGenerator
 from src.agent.trading import TradingPromptGenerator
-from src.constants import FE_DATA_MARKETING_DEFAULTS, FE_DATA_TRADING_DEFAULTS
+from src.constants import FE_DATA_MARKETING_DEFAULTS, FE_DATA_TRADING_DEFAULTS, FE_DATA_POOLMIND_ARBITRAGE_DEFAULTS
 
 
 class ManagerClient:
@@ -24,7 +24,7 @@ class ManagerClient:
 		Fetch frontend data for the specified agent type.
 
 		Args:
-		        type (str): The type of agent ("trading" or "marketing")
+		        type (str): The type of agent ("trading", "marketing", or "poolmind_arbitrage")
 
 		Returns:
 		        dict: A dictionary containing the frontend data with defaults filled in
@@ -33,11 +33,14 @@ class ManagerClient:
 		        If an error occurs during fetching, the method falls back to default values
 		        and logs the error.
 		"""
-		fe_data = (
-			FE_DATA_TRADING_DEFAULTS.copy()
-			if type == "trading"
-			else FE_DATA_MARKETING_DEFAULTS.copy()
-		)
+		if type == "trading":
+			fe_data = FE_DATA_TRADING_DEFAULTS.copy()
+		elif type == "marketing":
+			fe_data = FE_DATA_MARKETING_DEFAULTS.copy()
+		elif type == "poolmind_arbitrage":
+			fe_data = FE_DATA_POOLMIND_ARBITRAGE_DEFAULTS.copy()
+		else:
+			fe_data = FE_DATA_TRADING_DEFAULTS.copy()  # Default fallback
 
 		try:
 			# Get default prompts
