@@ -105,14 +105,25 @@ class PoolMindArbitragePromptGenerator:
                 - Volume and liquidity metrics
                 - Market sentiment analysis
                 
-                Generate Python code to collect and analyze this market data.
+                Write only the code to collect and analyze this market data.
                 Focus on identifying price discrepancies that could be profitable after accounting for:
                 - Trading fees on both exchanges
                 - Slippage estimates
                 - Network transaction costs
                 - Execution time risks
                 
-                Return structured data about opportunities ranked by profitability and risk.
+                Format the code as follows:
+                ```python
+                from dotenv import load_dotenv
+                import ...
+
+                load_dotenv()
+
+                def main():
+                    ....
+
+                main()
+                ```
             """),
             
             "arbitrage_strategy_prompt": dedent("""
@@ -158,14 +169,25 @@ class PoolMindArbitragePromptGenerator:
                 - Execution timeframe: {execution_time}
                 - Exchanges involved: {exchanges}
                 
-                Generate Python code to:
+                Write only the code to:
                 1. Prepare the fund request payload
                 2. Calculate HMAC signature for authentication
                 3. Submit request to PoolMind API
                 4. Handle approval/rejection responses
                 5. Proceed with trade execution upon approval
                 
-                Include proper error handling and logging for transparency.
+                Format the code as follows:
+                ```python
+                from dotenv import load_dotenv
+                import ...
+
+                load_dotenv()
+
+                def main():
+                    ....
+
+                main()
+                ```
             """),
             
             "execution_code_prompt": dedent("""
@@ -180,7 +202,7 @@ class PoolMindArbitragePromptGenerator:
                 - Sell Exchange: {sell_exchange}
                 - Expected Profit: {expected_profit}
                 
-                Execution Requirements:
+                Write only the code for:
                 1. Simultaneous order placement on both exchanges
                 2. Real-time monitoring of execution status
                 3. Risk management with stop-loss triggers
@@ -195,7 +217,18 @@ class PoolMindArbitragePromptGenerator:
                 - PoolMind profit reporting
                 - NAV update triggers
                 
-                Ensure all trades are executed atomically where possible.
+                Format the code as follows:
+                ```python
+                from dotenv import load_dotenv
+                import ...
+
+                load_dotenv()
+
+                def main():
+                    ....
+
+                main()
+                ```
             """),
             
             "risk_assessment_prompt": dedent("""
@@ -225,12 +258,23 @@ class PoolMindArbitragePromptGenerator:
                    - Network connectivity issues
                    - Smart contract interaction risks
                 
-                Generate a risk score (1-10) and recommendation:
+                Write only the code to generate a risk score (1-10) and recommendation:
                 - 1-3: Low risk - Proceed with full position
                 - 4-6: Medium risk - Reduce position size
                 - 7-10: High risk - Abort opportunity
                 
-                Include specific mitigation strategies for identified risks.
+                Format the code as follows:
+                ```python
+                from dotenv import load_dotenv
+                import ...
+
+                load_dotenv()
+
+                def main():
+                    ....
+
+                main()
+                ```
             """)
         }
     

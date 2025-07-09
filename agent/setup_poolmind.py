@@ -63,60 +63,9 @@ def create_config_file():
     """Create configuration file from template."""
     print("⚙️  Setting up configuration...")
     
-    config_template = """# PoolMind Arbitrage Agent Configuration
-
-# Agent Configuration
-POOLMIND_AGENT_ID=poolmind-arbitrage-agent
-POOLMIND_LOG_FILE=logs/poolmind_arbitrage.log
-
-# LLM Configuration (at least one required)
-POOLMIND_MODEL_BACKEND=deepseek_v3_or
-OPENAI_API_KEY=your_openai_api_key_here
-ANTHROPIC_API_KEY=your_anthropic_api_key_here
-OPENROUTER_API_KEY=your_openrouter_api_key_here
-
-# PoolMind API Configuration (required)
-POOLMIND_API_URL=http://localhost:3000
-POOLMIND_HMAC_SECRET=your_poolmind_hmac_secret_here
-
-# Trading Configuration
-POOLMIND_SUPPORTED_EXCHANGES=binance,okx,gate,hotcoin,bybit,coinw,orangex
-POOLMIND_MIN_PROFIT_THRESHOLD=0.5
-POOLMIND_MAX_TRADE_SIZE_PERCENT=10.0
-POOLMIND_STOP_LOSS_THRESHOLD=5.0
-
-# Database Configuration
-POOLMIND_DATABASE_PATH=data/poolmind_arbitrage.db
-
-# RAG Configuration
-RAG_API_URL=http://localhost:8080
-
-# Container Configuration
-CONTAINER_IMAGE=superioragents/agent-executor:latest
-CONTAINER_CACHE_FOLDER=cache
-
-# Monitoring Configuration
-POOLMIND_MONITORING_INTERVAL=60
-POOLMIND_CONTINUOUS_MODE=false
-
-# Exchange API Keys (configure as needed)
-# Binance
-BINANCE_API_KEY=your_binance_api_key_here
-BINANCE_API_SECRET=your_binance_api_secret_here
-
-# OKX
-OKX_API_KEY=your_okx_api_key_here
-OKX_API_SECRET=your_okx_api_secret_here
-OKX_PASSPHRASE=your_okx_passphrase_here
-
-# Gate.io
-GATE_API_KEY=your_gate_api_key_here
-GATE_API_SECRET=your_gate_api_secret_here
-
-# Add other exchange keys as needed...
-"""
+    config_template = Path(".env.example").read_text()
     
-    config_file = Path("config/poolmind.env")
+    config_file = Path(".env")
     if not config_file.exists():
         config_file.write_text(config_template)
         print(f"✅ Created configuration file: {config_file}")
@@ -124,7 +73,7 @@ GATE_API_SECRET=your_gate_api_secret_here
         print(f"⚠️  Configuration file already exists: {config_file}")
     
     print("\n📝 Next steps:")
-    print("   1. Edit config/poolmind.env with your API keys")
+    print("   1. Edit .env with your API keys")
     print("   2. Set POOLMIND_HMAC_SECRET for PoolMind API authentication")
     print("   3. Configure at least one LLM API key (OpenAI, Anthropic, or OpenRouter)")
     print("   4. Add exchange API keys for the exchanges you want to use")
@@ -257,13 +206,13 @@ def main():
     if success:
         print("🎉 Setup completed successfully!")
         print("\n📖 Next steps:")
-        print("   1. Configure your API keys in config/poolmind.env")
+        print("   1. Configure your API keys in .env")
         print("   2. Start the PoolMind platform (orchestrator API)")
         print("   3. Start the RAG API service")
         print("   4. Run the agent:")
         print("      python src/starter/poolmind_arbitrage_starter.py")
         print("\n📚 Documentation:")
-        print("   - See POOLMIND_ARBITRAGE_README.md for detailed instructions")
+        print("   - See README.md for detailed instructions")
         print("   - Check the configuration file for all available options")
     else:
         print("❌ Setup encountered issues. Please resolve them before continuing.")

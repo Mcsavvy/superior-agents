@@ -33,6 +33,11 @@ import docker
 from anthropic import Anthropic
 from openai import OpenAI
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
 
 class PoolMindArbitrageStarter:
     """
@@ -274,7 +279,7 @@ class PoolMindArbitrageStarter:
         # Initialize clients based on backend
         clients = {}
         if config.get("openai_api_key"):
-            clients["openai_client"] = OpenAI(api_key=config["openai_api_key"])
+            clients["llama_client"] = OpenAI(api_key=config["openai_api_key"])
         if config.get("anthropic_api_key"):
             clients["anthropic_client"] = Anthropic(api_key=config["anthropic_api_key"])
         

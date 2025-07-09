@@ -5,7 +5,6 @@ from typing import Callable, List, Dict, Any
 
 from loguru import logger
 from result import UnwrapError
-from dateutil import parser
 from src.agent.poolmind_arbitrage import PoolMindArbitrageAgent
 from src.client.poolmind import PoolMindClient, FundRequest, ProfitReport
 from src.datatypes import (
@@ -13,7 +12,6 @@ from src.datatypes import (
     StrategyDataParameters,
     StrategyInsertData,
 )
-from src.helper import nanoid
 from src.types import ChatHistory
 import uuid
 
@@ -66,9 +64,6 @@ def poolmind_arbitrage_flow(
     # Initialize system prompt
     new_ch = agent.prepare_system(
         role=role,
-        supported_exchanges=supported_exchanges,
-        min_profit_threshold=min_profit_threshold,
-        max_trade_size_percent=max_trade_size_percent,
         pool_state=pool_state
     )
     agent.chat_history += new_ch

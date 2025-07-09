@@ -49,19 +49,25 @@ class ContainerManager:
 			_container = client.containers.get(container_identifier)
 		except docker.errors.NotFound:
 			# If not found, try listing all containers and searching by name
+			# Generate the sanitized container name for searching
+			container_name = container_identifier.replace("/", "-").replace(":", "-")
 			all_containers = client.containers.list(all=True)
 			matching_containers = [
-				c for c in all_containers if container_identifier in (c.name, c.id)
+				c for c in all_containers if container_name in (c.name, c.id) or container_identifier in (c.name, c.id)
 			]
 			if not matching_containers:
 				logger.info(
 					f"Container not found: {container_identifier}, attempting to create it"
 				)
 				try:
+					# Generate a valid container name from the container_identifier
+					# Remove invalid characters for container names
+					container_name = container_identifier.replace("/", "-").replace(":", "-")
+					
 					_container = client.containers.create(
-						image="superioragents/agent-executor:latest",
-						name=container_identifier,
-						hostname=container_identifier,
+						image=container_identifier,  # Use the full image name:tag
+						name=container_name,  # Use sanitized name for container
+						hostname=container_name,
 						environment={"PYTHONUNBUFFERED": "1"},
 						network_mode="host",
 						detach=True,
