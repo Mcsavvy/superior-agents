@@ -1,3 +1,6 @@
+import hashlib
+import hmac
+import json
 from typing import Any, Dict, List, Optional
 from decimal import Decimal
 import time
@@ -66,7 +69,7 @@ class PoolMindSensor:
         poolmind_api_url: str,
         supported_exchanges: List[str],
         exchange_configs: Dict[str, Dict[str, Any]],
-        stx_contract_address: str = "SP4SZE494VC2YC5JYG7AYFQ44F5Q4PYV7DVMDPBG.stacks-token"
+        hmac_secret: str,
     ):
         """
         Initialize the PoolMind sensor.
@@ -75,12 +78,13 @@ class PoolMindSensor:
             poolmind_api_url (str): Base URL for PoolMind API
             supported_exchanges (List[str]): List of supported exchanges
             exchange_configs (Dict[str, Dict[str, Any]]): Configuration for each exchange
-            stx_contract_address (str): STX token contract address
         """
         self.poolmind_api_url = poolmind_api_url.rstrip('/')
         self.supported_exchanges = supported_exchanges
         self.exchange_configs = exchange_configs
-        self.stx_contract_address = stx_contract_address
+        self.hmac_secret = hmac_secret
+        self.session = requests.Session()
+        self.timeout = 30
         
         # Mock data for development/testing
         self.mock_pool_state = PoolState(
@@ -116,6 +120,81 @@ class PoolMindSensor:
             "coinw": ExchangePrice("coinw", 2.47, 2.48, 300000, 15000, int(time.time())),
             "orangex": ExchangePrice("orangex", 2.44, 2.45, 200000, 10000, int(time.time()))
         }
+
+    def _generate_hmac_signature(self, method: str, path: str, body: str = "", timestamp: str = None) -> str:
+        """
+        Generate HMAC signature for request authentication.
+        
+        Args:
+            method (str): HTTP method (GET, POST, etc.)
+            path (str): API endpoint path
+            body (str): Request body (for POST requests)
+            timestamp (str): Request timestamp (in milliseconds)
+            
+        Returns:
+            str: HMAC signature
+        """
+        if timestamp is None:
+            timestamp = str(int(time.time() * 1000))  # Use milliseconds
+        
+        # Create message to sign: method + path + timestamp + body
+        message = f"{method.upper()}{path}{timestamp}{body}"
+        
+        # Generate HMAC signature
+        signature = hmac.new(
+            self.hmac_secret.encode('utf-8'),
+            message.encode('utf-8'),
+            hashlib.sha256
+        ).hexdigest()
+        
+        return signature
+    
+    def _make_authenticated_request(
+        self,
+        method: str,
+        endpoint: str,
+        data: Optional[Dict[str, Any]] = None
+    ) -> requests.Response:
+        """
+        Make an authenticated request to the PoolMind API.
+        
+        Args:
+            method (str): HTTP method
+            endpoint (str): API endpoint
+            data (Optional[Dict[str, Any]]): Request data
+            
+        Returns:
+            requests.Response: API response
+            
+        Raises:
+            requests.HTTPError: If the request fails
+        """
+        url = f"{self.poolmind_api_url}{endpoint}"
+        timestamp = str(int(time.time() * 1000))  # Use milliseconds
+        
+        # Prepare request body
+        body = json.dumps(data) if data else ""
+        
+        # Generate HMAC signature
+        signature = self._generate_hmac_signature(method, endpoint, body, timestamp)
+        
+        # Set authentication headers - using the correct format from the API spec
+        headers = {
+            'x-signature': f'sha256={signature}',
+            'x-timestamp': timestamp
+        }
+        
+        # Make request
+        response = self.session.request(
+            method=method,
+            url=url,
+            headers=headers,
+            data=body if body else None,
+            timeout=self.timeout
+        )
+        
+        response.raise_for_status()
+        return response
     
     def get_pool_state(self) -> Dict[str, Any]:
         """
@@ -126,7 +205,11 @@ class PoolMindSensor:
         """
         try:
             # Try to fetch from actual API
-            response = requests.get(f"{self.poolmind_api_url}/api/v1/pool/state", timeout=10)
+            response = self._make_authenticated_request(
+                method="GET",
+                endpoint="/api/v1/pool/state",
+                data=None
+            )
             if response.status_code == 200:
                 pool_data = response.json()
                 return {

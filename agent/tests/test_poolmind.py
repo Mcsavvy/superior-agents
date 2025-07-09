@@ -74,7 +74,8 @@ class TestPoolMindSensor:
                 "binance": {"api_endpoint": "https://api.binance.com"},
                 "okx": {"api_endpoint": "https://www.okx.com"},
                 "gate": {"api_endpoint": "https://api.gateio.ws"}
-            }
+            },
+            hmac_secret="test-secret"
         )
     
     def test_init(self):

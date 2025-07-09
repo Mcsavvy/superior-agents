@@ -6,7 +6,7 @@ from typing import Callable, List, Dict, Any
 from loguru import logger
 from result import UnwrapError
 from src.agent.poolmind_arbitrage import PoolMindArbitrageAgent
-from src.client.poolmind import PoolMindClient, FundRequest, ProfitReport
+from src.client.poolmind import PoolMindClient
 from src.datatypes import (
     StrategyData,
     StrategyDataParameters,
@@ -230,24 +230,28 @@ def poolmind_arbitrage_flow(
         required_amount = max_allowed
         logger.info(f"Reducing trade size to maximum allowed: {required_amount}")
     
-    fund_request = FundRequest(
-        amount_stx=required_amount,
-        purpose="arbitrage_opportunity",
-        expected_profit=best_opportunity.expected_profit,
-        risk_assessment=risk_data.get("recommendation", "medium"),
-        exchanges=[best_opportunity.buy_exchange, best_opportunity.sell_exchange],
-        estimated_duration="5_minutes"
-    )
+    # Get deposit address from the buy exchange
+    buy_exchange_deposit_address = agent.get_exchange_deposit_address(best_opportunity.buy_exchange)
+    
+    memo = f"Arbitrage trade: {best_opportunity.buy_exchange} -> {best_opportunity.sell_exchange}, Expected profit: {best_opportunity.expected_profit:.2f} STX"
     
     fund_request_success = False
     approved_amount = 0
     
     try:
-        fund_response = poolmind_client.request_funds(fund_request)
-        if fund_response.get("status") == "approved":
-            approved_amount = fund_response.get("approved_amount", 0)
+        fund_response = poolmind_client.request_funds(
+            recipient_address=buy_exchange_deposit_address,
+            amount=required_amount,
+            memo=memo
+        )
+        
+        if fund_response.get("success"):
+            # Extract amount from the response data
+            response_data = fund_response.get("data", {})
+            approved_amount = response_data.get("amount", required_amount)
             fund_request_success = True
-            logger.info(f"Fund request approved: {approved_amount} STX")
+            logger.info(f"Fund request approved: {approved_amount} STX to {buy_exchange_deposit_address}")
+            logger.info(f"Transaction ID: {response_data.get('txId', 'N/A')}")
         else:
             logger.info(f"Fund request rejected: {fund_response.get('message', 'Unknown reason')}")
     except Exception as e:
@@ -294,8 +298,8 @@ def poolmind_arbitrage_flow(
     
     logger.info(f"Trade execution results: {trade_output[:500]}...")
     
-    # Step 7: Parse trade results and report profit
-    logger.info("Step 7: Reporting profit to PoolMind...")
+    # Step 7: Calculate trade results
+    logger.info("Step 7: Calculating trade results...")
     
     try:
         # Parse trade results (this would be more sophisticated in real implementation)
@@ -307,28 +311,21 @@ def poolmind_arbitrage_flow(
         fees_paid = approved_amount * 0.002  # Assume 0.2% total fees
         net_profit = actual_profit - fees_paid
         
-        profit_report = ProfitReport(
-            trade_id=trade_id,
-            initial_amount=approved_amount,
-            final_amount=final_amount,
-            profit=actual_profit,
-            fees_paid=fees_paid,
-            net_profit=net_profit,
-            execution_time=f"{best_opportunity.execution_time_estimate} seconds"
-        )
+        logger.info(f"Trade results calculated:")
+        logger.info(f"  Initial amount: {approved_amount} STX")
+        logger.info(f"  Final amount: {final_amount} STX")
+        logger.info(f"  Gross profit: {actual_profit} STX")
+        logger.info(f"  Fees paid: {fees_paid} STX")
+        logger.info(f"  Net profit: {net_profit} STX")
         
-        profit_response = poolmind_client.report_profit(profit_report)
-        logger.info(f"Profit reported successfully: {profit_response}")
-        
-        # Update NAV if profit is positive
-        if net_profit > 0:
-            current_nav = pool_state["current_nav"]
-            new_nav = current_nav + (net_profit / pool_state["available_stx"])
-            poolmind_client.update_nav(new_nav, net_profit)
-            logger.info(f"NAV updated from {current_nav} to {new_nav}")
+        # Note: Profit reporting and NAV updates would be handled by the PoolMind platform
+        # based on the actual trade execution results from the exchanges
         
     except Exception as e:
-        logger.error(f"Profit reporting failed: {e}")
+        logger.error(f"Trade result calculation failed: {e}")
+        # Set default values for logging
+        net_profit = 0
+        actual_profit = 0
     
     # Step 8: Save strategy and results
     logger.info("Step 8: Saving strategy and results...")

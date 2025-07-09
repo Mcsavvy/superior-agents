@@ -3,36 +3,11 @@ import hashlib
 import json
 import time
 from typing import Dict, Any, Optional
-from dataclasses import dataclass
 import requests
 from loguru import logger
 
 
-@dataclass
-class FundRequest:
-    """
-    Data class for fund request parameters.
-    """
-    amount_stx: float
-    purpose: str
-    expected_profit: float
-    risk_assessment: str
-    exchanges: list
-    estimated_duration: str
 
-
-@dataclass
-class ProfitReport:
-    """
-    Data class for profit reporting parameters.
-    """
-    trade_id: str
-    initial_amount: float
-    final_amount: float
-    profit: float
-    fees_paid: float
-    net_profit: float
-    execution_time: str
 
 
 class PoolMindClient:
@@ -79,13 +54,13 @@ class PoolMindClient:
             method (str): HTTP method (GET, POST, etc.)
             path (str): API endpoint path
             body (str): Request body (for POST requests)
-            timestamp (str): Request timestamp
+            timestamp (str): Request timestamp (in milliseconds)
             
         Returns:
             str: HMAC signature
         """
         if timestamp is None:
-            timestamp = str(int(time.time()))
+            timestamp = str(int(time.time() * 1000))  # Use milliseconds
         
         # Create message to sign: method + path + timestamp + body
         message = f"{method.upper()}{path}{timestamp}{body}"
@@ -120,7 +95,7 @@ class PoolMindClient:
             requests.HTTPError: If the request fails
         """
         url = f"{self.base_url}{endpoint}"
-        timestamp = str(int(time.time()))
+        timestamp = str(int(time.time() * 1000))  # Use milliseconds
         
         # Prepare request body
         body = json.dumps(data) if data else ""
@@ -128,11 +103,10 @@ class PoolMindClient:
         # Generate HMAC signature
         signature = self._generate_hmac_signature(method, endpoint, body, timestamp)
         
-        # Set authentication headers
+        # Set authentication headers - using the correct format from the API spec
         headers = {
-            'x-agent-id': self.agent_id,
-            'x-timestamp': timestamp,
-            'x-hmac-signature': signature
+            'x-signature': f'sha256={signature}',
+            'x-timestamp': timestamp
         }
         
         # Make request
@@ -147,32 +121,33 @@ class PoolMindClient:
         response.raise_for_status()
         return response
     
-    def request_funds(self, fund_request: FundRequest) -> Dict[str, Any]:
+    def request_funds(self, recipient_address: str, amount: float, memo: str = None) -> Dict[str, Any]:
         """
         Request funds from PoolMind for arbitrage trading.
         
         Args:
-            fund_request (FundRequest): Fund request parameters
+            recipient_address (str): STX address to receive the funds
+            amount (float): Amount in STX to transfer
+            memo (str, optional): Optional memo for the transfer
             
         Returns:
-            Dict[str, Any]: API response with approval status
+            Dict[str, Any]: API response with transfer details
             
         Raises:
             requests.HTTPError: If the request fails
         """
         try:
             data = {
-                "amount_stx": fund_request.amount_stx,
-                "purpose": fund_request.purpose,
-                "expected_profit": fund_request.expected_profit,
-                "risk_assessment": fund_request.risk_assessment,
-                "exchanges": fund_request.exchanges,
-                "estimated_duration": fund_request.estimated_duration
+                "recipientAddress": recipient_address,
+                "amount": amount
             }
+            
+            if memo:
+                data["memo"] = memo
             
             response = self._make_authenticated_request(
                 method="POST",
-                endpoint="/api/v1/agent/fund-request",
+                endpoint="/api/v1/fund-request",
                 data=data
             )
             
@@ -187,53 +162,14 @@ class PoolMindClient:
             logger.error(f"Unexpected error in fund request: {e}")
             raise
     
-    def report_profit(self, profit_report: ProfitReport) -> Dict[str, Any]:
-        """
-        Report trading profit to PoolMind.
-        
-        Args:
-            profit_report (ProfitReport): Profit report parameters
-            
-        Returns:
-            Dict[str, Any]: API response
-            
-        Raises:
-            requests.HTTPError: If the request fails
-        """
-        try:
-            data = {
-                "trade_id": profit_report.trade_id,
-                "initial_amount": profit_report.initial_amount,
-                "final_amount": profit_report.final_amount,
-                "profit": profit_report.profit,
-                "fees_paid": profit_report.fees_paid,
-                "net_profit": profit_report.net_profit,
-                "execution_time": profit_report.execution_time
-            }
-            
-            response = self._make_authenticated_request(
-                method="POST",
-                endpoint="/api/v1/agent/profit-report",
-                data=data
-            )
-            
-            result = response.json()
-            logger.info(f"Profit reported: {result}")
-            return result
-            
-        except requests.HTTPError as e:
-            logger.error(f"Profit report failed: {e}")
-            raise
-        except Exception as e:
-            logger.error(f"Unexpected error in profit report: {e}")
-            raise
+
     
-    def get_available_balance(self) -> Dict[str, Any]:
+    def get_admin_wallet_info(self) -> Dict[str, Any]:
         """
-        Get available balance for the agent.
+        Get admin wallet address for reference.
         
         Returns:
-            Dict[str, Any]: Available balance information
+            Dict[str, Any]: Admin wallet information
             
         Raises:
             requests.HTTPError: If the request fails
@@ -241,18 +177,18 @@ class PoolMindClient:
         try:
             response = self._make_authenticated_request(
                 method="GET",
-                endpoint="/api/v1/agent/balance"
+                endpoint="/api/v1/fund-request/admin/balance"
             )
             
             result = response.json()
-            logger.info(f"Available balance: {result}")
+            logger.info(f"Admin wallet info: {result}")
             return result
             
         except requests.HTTPError as e:
-            logger.error(f"Balance check failed: {e}")
+            logger.error(f"Admin wallet info request failed: {e}")
             raise
         except Exception as e:
-            logger.error(f"Unexpected error in balance check: {e}")
+            logger.error(f"Unexpected error in admin wallet info request: {e}")
             raise
     
     def get_pool_state(self) -> Dict[str, Any]:
@@ -266,6 +202,7 @@ class PoolMindClient:
             requests.HTTPError: If the request fails
         """
         try:
+            # Pool state endpoint doesn't require authentication per OpenAPI spec
             response = self.session.get(
                 f"{self.base_url}/api/v1/pool/state",
                 timeout=self.timeout
@@ -283,98 +220,60 @@ class PoolMindClient:
             logger.error(f"Unexpected error in pool state request: {e}")
             raise
     
-    def update_nav(self, new_nav: float, profit_amount: float) -> Dict[str, Any]:
+    def get_pool_info(self) -> Dict[str, Any]:
         """
-        Update pool NAV based on trading profits.
+        Get pool token information including name, symbol, decimals, and total supply.
         
-        Args:
-            new_nav (float): New NAV value
-            profit_amount (float): Profit amount to add
-            
         Returns:
-            Dict[str, Any]: API response
+            Dict[str, Any]: Pool token information
             
         Raises:
             requests.HTTPError: If the request fails
         """
         try:
-            data = {
-                "new_nav": new_nav,
-                "profit_amount": profit_amount,
-                "agent_id": self.agent_id
-            }
-            
-            response = self._make_authenticated_request(
-                method="POST",
-                endpoint="/api/v1/agent/update-nav",
-                data=data
+            response = self.session.get(
+                f"{self.base_url}/api/v1/pool/info",
+                timeout=self.timeout
             )
             
+            response.raise_for_status()
             result = response.json()
-            logger.info(f"NAV updated: {result}")
+            logger.debug(f"Pool info: {result}")
             return result
             
         except requests.HTTPError as e:
-            logger.error(f"NAV update failed: {e}")
+            logger.error(f"Pool info request failed: {e}")
             raise
         except Exception as e:
-            logger.error(f"Unexpected error in NAV update: {e}")
+            logger.error(f"Unexpected error in pool info request: {e}")
             raise
     
-    def get_agent_performance(self) -> Dict[str, Any]:
+    def get_current_nav(self) -> Dict[str, Any]:
         """
-        Get agent performance metrics.
+        Get current Net Asset Value (NAV) of the pool.
         
         Returns:
-            Dict[str, Any]: Performance metrics
+            Dict[str, Any]: Current NAV information
             
         Raises:
             requests.HTTPError: If the request fails
         """
         try:
-            response = self._make_authenticated_request(
-                method="GET",
-                endpoint="/api/v1/agent/performance"
+            response = self.session.get(
+                f"{self.base_url}/api/v1/pool/nav",
+                timeout=self.timeout
             )
             
+            response.raise_for_status()
             result = response.json()
-            logger.debug(f"Agent performance: {result}")
+            logger.debug(f"Current NAV: {result}")
             return result
             
         except requests.HTTPError as e:
-            logger.error(f"Performance request failed: {e}")
+            logger.error(f"NAV request failed: {e}")
             raise
         except Exception as e:
-            logger.error(f"Unexpected error in performance request: {e}")
+            logger.error(f"Unexpected error in NAV request: {e}")
             raise
     
-    def submit_trade_notification(self, trade_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Submit trade notification for transparency.
-        
-        Args:
-            trade_data (Dict[str, Any]): Trade execution data
-            
-        Returns:
-            Dict[str, Any]: API response
-            
-        Raises:
-            requests.HTTPError: If the request fails
-        """
-        try:
-            response = self._make_authenticated_request(
-                method="POST",
-                endpoint="/api/v1/agent/trade-notification",
-                data=trade_data
-            )
-            
-            result = response.json()
-            logger.info(f"Trade notification submitted: {result}")
-            return result
-            
-        except requests.HTTPError as e:
-            logger.error(f"Trade notification failed: {e}")
-            raise
-        except Exception as e:
-            logger.error(f"Unexpected error in trade notification: {e}")
-            raise 
+ 

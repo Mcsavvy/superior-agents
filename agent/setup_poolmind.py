@@ -151,7 +151,8 @@ def run_basic_test():
         sensor = PoolMindSensor(
             poolmind_api_url="http://localhost:3000",
             supported_exchanges=["binance", "okx"],
-            exchange_configs={"binance": {}, "okx": {}}
+            exchange_configs={"binance": {}, "okx": {}},
+            hmac_secret="test-secret"
         )
         client = PoolMindClient(
             base_url="http://localhost:3000",

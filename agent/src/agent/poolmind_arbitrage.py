@@ -681,4 +681,36 @@ class PoolMindArbitrageAgent:
             return Ok((risk_data, updated_history))
             
         except Exception as e:
-            return Err(f"Risk assessment failed: {str(e)}") 
+            return Err(f"Risk assessment failed: {str(e)}")
+    
+    def get_exchange_deposit_address(self, exchange: str, asset: str = "STX") -> str:
+        """
+        Get deposit address for a specific exchange and asset.
+        
+        In a real implementation, this would call the exchange's API to get
+        a fresh deposit address for the trading account.
+        
+        Args:
+            exchange (str): Exchange name (e.g., "binance", "okx")
+            asset (str): Asset symbol (default: "STX")
+            
+        Returns:
+            str: Deposit address for the exchange
+        """
+        # Mock implementation - in reality this would call exchange APIs
+        mock_addresses = {
+            "binance": "SP1BINANCEDEPOSIT123456789ABCDEFGHIJK",
+            "okx": "SP1OKXDEPOSIT123456789ABCDEFGHIJKLMN",
+            "gate": "SP1GATEDEPOSIT123456789ABCDEFGHIJKLM",
+            "hotcoin": "SP1HOTCOINDEPOSIT123456789ABCDEFGHIJ",
+            "bybit": "SP1BYBITDEPOSIT123456789ABCDEFGHIJKL",
+            "coinw": "SP1COINWDEPOSIT123456789ABCDEFGHIJKL",
+            "orangex": "SP1ORANGEXDEPOSIT123456789ABCDEFGHIJ"
+        }
+        
+        # Return mock address or generate one if exchange not in list
+        if exchange.lower() in mock_addresses:
+            return mock_addresses[exchange.lower()]
+        else:
+            # Generate a mock address for unknown exchanges
+            return f"SP1{exchange.upper()[:8]}DEPOSIT123456789ABCDEF" 

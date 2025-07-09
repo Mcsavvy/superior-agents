@@ -215,7 +215,8 @@ class PoolMindArbitrageStarter:
         components["sensor"] = PoolMindSensor(
             poolmind_api_url=config["poolmind_api_url"],
             supported_exchanges=config["supported_exchanges"],
-            exchange_configs=config["exchange_configs"]
+            exchange_configs=config["exchange_configs"],
+            hmac_secret=config["poolmind_hmac_secret"]
         )
         
         # Initialize PoolMind client
